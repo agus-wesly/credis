@@ -1,5 +1,6 @@
 #include "buffer.h"
 #include "dynamic_array.h"
+#include "request.h"
 #include <poll.h>
 
 #ifndef MAIN_H
@@ -12,15 +13,15 @@ typedef struct
     bool want_write;
     bool want_close;
 
-    int8 *incoming;
-    int8 *outgoing;
+    Buffer *incoming;
+    Buffer *outgoing;
 } Conn;
 
 #define buf_append(buff, data, size) \
     do{ \
         for (int i = 0; i < (size); ++i) \
         { \
-            arr_push((buff), ((char *)(data))[i]); \
+            buff_push((buff), ((char *)(data))[i]); \
         } \
     } while(0); \
 
@@ -29,7 +30,7 @@ typedef struct
 do{ \
     for (int i = 0; i < n; ++i) \
     { \
-        pop_front((arr)); \
+        buff_pop_front((arr)); \
     } \
 } while(0); \
 

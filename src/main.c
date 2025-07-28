@@ -23,29 +23,31 @@ void msg(const char *message)
     fprintf(stderr, "%s\n", message);
 }
 
-bool process_one_request(Conn *c)
+bool process_one_request(Conn *c, int8 *request, int len)
 {
-    if (arr_len(c->incoming) < 4)
-    {
-        return false;
-    }
-    int len = {0};
-    memcpy(&len, c->incoming, 4);
+    // payload = [nstrings, nchar, @@@... nchar, @@@...]
+    Request *r = new_request(request, len);
 
-    if (len > MAX_LENGTH)
-    {
-        fprintf(stderr, "Too long\n");
-        c->want_close = true;
-        return false;
-    }
+    char *d = read_next(r);
+    printf("METHOD IS %s\n", d);
 
-    if (4 + len > arr_len(c->incoming))
+    d = read_next(r);
+    if (d == NULL)
     {
-        return false;
+        assert(0 && "TODO : handle bad request");
     }
+    printf("PAYLOAD IS : %s\n", d);
 
-    int8 *request = &c->incoming[4];
-    printf("Retrieved data => %.*s\n", len, request);
+    d = read_next(r);
+    if (d != NULL)
+        printf("The rest : ");
+
+    while (d != NULL)
+    {
+        printf("%s, ", d);
+        d = read_next(r);
+    }
+    printf("\n");
 
     // Replies
     char *response = "Hello from server";
@@ -57,17 +59,44 @@ bool process_one_request(Conn *c)
     c->want_read = false;
     c->want_write = true;
 
-    // Done reading, remove the incoming buffer
-    // TODO : improve this function
-    buf_consume(c->incoming, 4 + len);
+    free_request(r);
     return true;
+}
+
+bool try_one_request(Conn *c)
+{
+    if (buff_len(c->incoming) < 4)
+    {
+        return false;
+    }
+    int len = {0};
+    memcpy(&len, buff_data(c->incoming), 4);
+
+    if (len > MAX_LENGTH)
+    {
+        fprintf(stderr, "Too long\n");
+        c->want_close = true;
+        return false;
+    }
+
+    if (4 + len > (int)buff_len(c->incoming))
+    {
+        return false;
+    }
+
+    int8 *request = &buff_data(c->incoming)[4];
+    // printf("Retrieved data => %.*s\n", len, request);
+
+    bool done = process_one_request(c, request, len);
+    buf_consume(c->incoming, 4 + len);
+    return done;
 }
 
 void write_all(Conn *c)
 {
-    assert(arr_len(c->outgoing) > 0);
+    assert(buff_len(c->outgoing) > 0);
 
-    int recv = write(c->fd, c->outgoing, arr_len(c->outgoing));
+    int recv = write(c->fd, buff_data(c->outgoing), buff_len(c->outgoing));
     if (recv == -1)
     {
         fprintf(stderr, "write()\n");
@@ -84,7 +113,7 @@ void write_all(Conn *c)
     buf_consume(c->outgoing, recv);
 
     // Check if all data is writted
-    if (arr_len(c->outgoing) == 0)
+    if (buff_len(c->outgoing) == 0)
     {
         c->want_read = true;
         c->want_write = false;
@@ -109,11 +138,11 @@ void read_all(Conn *c)
     }
 
     buf_append(c->incoming, buff, sz);
-    while (process_one_request(c))
+    while (try_one_request(c))
     {
     };
     // Write directly from here
-    if (arr_len(c->outgoing) > 0)
+    if (buff_len(c->outgoing) > 0)
     {
         c->want_read = false;
         c->want_write = true;
@@ -151,12 +180,8 @@ Conn *handle_accept(struct pollfd *fds)
     c->want_write = false;
     c->want_close = false;
 
-    c->incoming = NULL;
-    c->outgoing = NULL;
-
-    arr_init(c->incoming);
-    arr_init(c->outgoing);
-
+    c->incoming = new_buffer();
+    c->outgoing = new_buffer();
     return c;
 }
 
@@ -191,6 +216,13 @@ int setup_connection()
     }
     fd_set_nb(fd);
     return fd;
+}
+
+void free_conn(Conn *c)
+{
+    free_buff(c->incoming);
+    free_buff(c->outgoing);
+    free(c);
 }
 
 int main()
@@ -278,7 +310,7 @@ int main()
                 printf("Closing fd : %d...\n", c->fd);
                 close(c->fd);
                 fd2conn[c->fd] = NULL;
-                free(c);
+                free_conn(c);
             }
         }
     }
