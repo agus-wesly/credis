@@ -1,0 +1,60 @@
+[k,z,y] = 3
+ t h
+[k,z,y,x,s] = 5
+ t h
+[-,z,y,x,s,k,-] = 7
+ t h
+
+[-,z,y,x,s,k,-] = 7
+   h       t
+i = h;
+def reorder:
+ t = h
+idx_n, idx_0
+    while i < len :
+     idx_n = i % cap;
+     idx_o = i % old_cap;
+     new[idx_n] =  old[idx_o]
+ t = idx_n
+if len + 1 >= cap :
+ new = malloc()
+ reorder(old,new)
+ free(old)
+
+
+[x,x,x,x,x,x,7,8]
+[x, x, 1, 2, 3, 4, ]
+[x, x, 1, 2, 3, 4, 0, 1, 69, 0, 4, ]
+
+
+
+
+Buffer {
+    int8 *beginning;
+    size_t start;
+    size_t end;
+}
+
+len = end - start;
+cap = 10 >> 20;
+[-,-,z,k,a,1,2,y,y,y] = 10
+
+start = 1
+end = 5
+
+[-,y,z,k,k];
+[-,y,z,k,k,-,-,-];
+[y,z,k,k,-,-,-,-];
+
+if len + 1> cap || end >= cap :
+    // resize and start from the beginning
+    memcpy(new, arr[start], len);
+    end = len;
+
+[z,k,a,1,2,y,y,y, ...] = 20
+
+
+
+
+
+
