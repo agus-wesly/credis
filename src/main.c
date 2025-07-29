@@ -23,34 +23,9 @@ void msg(const char *message)
     fprintf(stderr, "%s\n", message);
 }
 
-bool process_one_request(Conn *c, int8 *request, int len)
+static void reply(Conn *c, char *response)
 {
-    // payload = [nstrings, nchar, @@@... nchar, @@@...]
-    Request *r = new_request(request, len);
 
-    char *d = read_next(r);
-    printf("METHOD IS %s\n", d);
-
-    d = read_next(r);
-    if (d == NULL)
-    {
-        assert(0 && "TODO : handle bad request");
-    }
-    printf("PAYLOAD IS : %s\n", d);
-
-    d = read_next(r);
-    if (d != NULL)
-        printf("The rest : ");
-
-    while (d != NULL)
-    {
-        printf("%s, ", d);
-        d = read_next(r);
-    }
-    printf("\n");
-
-    // Replies
-    char *response = "Hello from server";
     int resp_len = strlen(response);
 
     buf_append(c->outgoing, &resp_len, 4);
@@ -58,8 +33,66 @@ bool process_one_request(Conn *c, int8 *request, int len)
 
     c->want_read = false;
     c->want_write = true;
+}
 
-    free_request(r);
+static void close_conn(Conn *c, char *response)
+{
+    reply(c, response);
+    c->want_close = true;
+}
+
+static void handle_get(Conn *c, Request *r)
+{
+    // Get the key
+    char *key = read_next(r);
+    if (key == NULL)
+    {
+        close_conn(c, "Please provide key");
+        return;
+    }
+
+    printf("Request key : %s\n", key);
+
+    reply(c, key);
+    free(key);
+}
+
+static void handle_set(Conn *c)
+{
+    close_conn(c, "TODO : SET");
+}
+
+static void handle_delete(Conn *c)
+{
+    close_conn(c, "TODO : DELETE");
+}
+
+bool process_one_request(Conn *conn, int8 *request, int len)
+{
+    // payload = [nstrings, nchar, @@@... nchar, @@@...]
+    Request *req = new_request(request, len);
+
+    char *data = read_next(req);
+    if (strcmp(data, "GET") == 0)
+    {
+        handle_get(conn, req);
+    }
+    else if (strcmp(data, "SET") == 0)
+    {
+        handle_set(conn);
+    }
+    else if (strcmp(data, "DELETE") == 0)
+    {
+        handle_delete(conn);
+    }
+    else
+    {
+        reply(conn, "Bad Request");
+        conn->want_close = true;
+    }
+
+    free(data);
+    free_request(req);
     return true;
 }
 
@@ -225,7 +258,7 @@ void free_conn(Conn *c)
     free(c);
 }
 
-int main()
+int main2()
 {
     int fd = setup_connection();
     struct pollfd *fds = NULL;
@@ -314,5 +347,37 @@ int main()
             }
         }
     }
+    return 0;
+}
+
+int main()
+{
+    Map m = {0};
+    init_map(&m);
+
+    char k[64];
+    for (int i = 0; i < 1000; ++i)
+    {
+        memset(k, 0, sizeof(k));
+        sprintf(k, "%d", i);
+        // printf("%s, len : %zu\n", k, strlen(k));
+        map_set(&m, k, k);
+    }
+    printf("\n");
+
+    map_delete(&m, "3");
+    map_delete(&m, "2");
+    map_delete(&m, "4");
+
+    map_set(&m, "4", "abc");
+    Value v = {0};
+    if (map_get(&m, "4", &v))
+    {
+        printf("%s\n", v);
+    };
+
+    print_map(&m);
+
+    free_map(&m);
     return 0;
 }

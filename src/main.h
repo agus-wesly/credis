@@ -1,6 +1,8 @@
 #include "buffer.h"
 #include "dynamic_array.h"
 #include "request.h"
+#include "map.h"
+
 #include <poll.h>
 
 #ifndef MAIN_H
