@@ -1,5 +1,7 @@
 #include "map.h"
 
+static char grave_value = {0};
+
 // Maybe this should not be in heap ??
 void init_map(Map *m)
 {
@@ -30,6 +32,8 @@ void free_map(Map *m) {
 
 static Entry *find_entry(Entry *entries, int32 hash, size_t cap)
 {
+    if(cap == 0) return NULL;
+
     int32 idx = hash % cap;
     // int32 idx = 1;
     Entry *grave = NULL;
@@ -108,7 +112,7 @@ bool map_get(Map *m, Key k, Value *v)
 {
     int32 hash = fnv_32a_str(k, strlen(k));
     Entry *e = find_entry(m->entries, hash, m->cap);
-    if (e->value == NULL || is_grave(e->value))
+    if (e == NULL || e->value == NULL || is_grave(e->value))
         return false;
 
     *v = e->value;
@@ -119,7 +123,7 @@ bool map_delete(Map *m, char *k)
 {
     int32 hash = fnv_32a_str(k, strlen(k));
     Entry *e = find_entry(m->entries, hash, m->cap);
-    if (e == NULL)
+    if (e == NULL || e->value == NULL || is_grave(e->value))
         return false;
 
     free(e->value);

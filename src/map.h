@@ -6,7 +6,6 @@
 
 #define CAP_FACTOR 0.75 // TODO : Adjust this
 
-static char grave_value = {0};
 
 typedef char *Key;
 typedef char *Value;

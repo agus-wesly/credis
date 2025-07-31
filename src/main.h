@@ -36,6 +36,15 @@ do{ \
     } \
 } while(0); \
 
+
+#define REPLY(c, ...) \
+    do{  \
+        char msg[512]; \
+        memset(msg, 0, sizeof(msg)); \
+        sprintf(msg,  __VA_ARGS__); \
+        reply(c, msg); \
+    } while(0); \
+
 Conn* new_connection(struct pollfd*);
 
 #endif
