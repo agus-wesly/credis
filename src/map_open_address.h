@@ -1,8 +1,8 @@
 #include "common.h"
 #include "hash.h"
 
-#ifndef MAP_H
-#define MAP_H
+#ifndef MAP_OPEN_ADDRESS_H
+#define MAP_OPEN_ADDRESS_H
 
 #define CAP_FACTOR 0.75 // TODO : Adjust this
 

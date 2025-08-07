@@ -12,6 +12,8 @@
 #define HOST "localhost"
 #define MAX_LENGTH 32 << 21
 
+HMap map;
+
 void die(const char *message)
 {
     fprintf(stderr, "[%d] %s\n", errno, message);
@@ -25,6 +27,9 @@ void msg(const char *message)
 
 static void reply(Conn *c, char *response)
 {
+    // TODO :
+    // > Check the type
+    // > Based on the type deserialize it
     int resp_len = strlen(response);
 
     buf_append(c->outgoing, &resp_len, 4);
@@ -41,7 +46,52 @@ static void close_conn(Conn *c, char *response)
     c->want_close = true;
 }
 
-Map db;
+
+bool entry_equal(HNode *a, HNode *b)
+{
+    Entry *first = container_of(a, Entry, node);
+    Entry *second = container_of(b, Entry, node);
+
+    return strcmp(first->key, second->key) == 0;
+}
+
+Entry *get_entry(char *key)
+{
+    Entry entry = {0};
+    entry.key = key;
+    entry.node.hash = fnv_32a_str(entry.key, strlen(entry.key));
+
+    HNode *found = hm_get(&map, &entry.node, entry_equal);
+    if (found == NULL) {
+        return NULL;
+    } else {
+        return container_of(found, Entry, node);
+    }
+}
+
+void set_entry(char *key, char *value)
+{
+    Entry *ent = malloc(sizeof(Entry));
+
+    ent->key = (char *)key;
+    ent->value = (char *)value;
+
+    ent->node.hash = fnv_32a_str(ent->key, strlen(ent->key));
+    hm_set(&map, &ent->node);
+}
+
+int delete_entry(char *key)
+{
+    Entry e;
+    e.key = key;
+    e.node.hash = fnv_32a_str(key, strlen(key));
+    HNode *res_node = hm_delete(&map, &e.node, entry_equal);
+    if(res_node == NULL) return 0;
+
+    Entry *res_entry = container_of(res_node, Entry, node);
+    free(res_entry);
+    return 1;
+}
 
 static void handle_get(Conn *c, Request *r)
 {
@@ -54,15 +104,12 @@ static void handle_get(Conn *c, Request *r)
     char *key = read_next(r);
     assert(key);
 
-    Value val = {0};
-    if (map_get(&db, key, &val))
-    {
-        reply(c, val);
-    }
-    else
-    {
+    Entry *entry = get_entry(key);
+    if(entry == NULL) {
         reply(c, "(nil)");
-    };
+    } else {
+        reply(c, entry->value);
+    }
 
     free(key);
 }
@@ -81,7 +128,12 @@ static void handle_set(Conn *c, Request *r)
     char *value = read_next(r);
     assert(value);
 
-    map_set(&db, key, value);
+    set_entry(key, value);
+
+    // check the value type (by delimeter)
+    // encode it to be entry with appropriate type
+
+    // map_set(&db, key, value);
     reply(c, "OK");
 }
 
@@ -99,10 +151,9 @@ static void handle_delete(Conn *c, Request *r)
     key = read_next(r);
     while (key != NULL)
     {
-        if (map_delete(&db, key))
-        {
+        if(delete_entry(key) > 0) {
             ++deleted;
-        };
+        }
 
         free(key);
         key = read_next(r);
@@ -386,3 +437,26 @@ int main()
     }
     return 0;
 }
+
+typedef struct
+{
+    HNode node;
+    ValueType type;
+    char *key;
+    char *value;
+
+    size_t length;
+} EntryArray;
+
+
+void print_entry(Entry *e)
+{
+    if (e == NULL)
+    {
+        printf("<null>\n");
+        return;
+    }
+    printf("%s\n", e->value);
+}
+
+

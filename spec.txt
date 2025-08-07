@@ -22,9 +22,18 @@ if len + 1> cap || end >= cap :
 
 [z,k,a,1,2,y,y,y, ...] = 20
 
+=====================================
 
+value type
+primitive => string, int, nil, boolean
+complex => array, struct (?)
 
+string => [type(1 byte), nlength(4 byte), content(n byte)]
+int => [type(1 byte), content(8 byte)]
+nil => [type(1 byte)]
+boolean => [type(1 byte), content(1 byte)]
 
+array => [type(1 byte), nlength(4 byte), content(n byte)]
+struct => ?
 
-
-
+string => Entry => HNode

@@ -1,12 +1,28 @@
 #include "buffer.h"
+#include "map_chain.h" 
 #include "dynamic_array.h"
 #include "request.h"
-#include "map.h"
 
 #include <poll.h>
 
 #ifndef MAIN_H
 #define MAIN_H
+
+typedef enum {
+    TYPE_INT,
+    TYPE_NIL,
+    TYPE_BOOL,
+    TYPE_STRING,
+    TYPE_ARRAY,
+} ValueType;
+
+typedef struct
+{
+    HNode node;
+    char *key;
+    char *value;
+} Entry;
+
 typedef struct
 {
     int fd;

@@ -7,12 +7,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
+#include <stddef.h>
 
 typedef unsigned int int32;
 typedef unsigned short int int16;
 typedef unsigned char int8;
 
-#define GROW_CAPACITY(cap) (cap < 8 ? 8 : cap * 2);
+#define GROW_CAPACITY(cap) ((cap) < 8 ? 8 : (cap) * 2);
 
 #endif // COMMON_H
