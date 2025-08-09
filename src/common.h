@@ -10,6 +10,7 @@
 #include <stddef.h>
 
 typedef unsigned int int32;
+typedef unsigned long int64;
 typedef unsigned short int int16;
 typedef unsigned char int8;
 

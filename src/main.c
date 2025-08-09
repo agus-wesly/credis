@@ -25,27 +25,64 @@ void msg(const char *message)
     fprintf(stderr, "%s\n", message);
 }
 
-static void reply(Conn *c, char *response)
-{
-    // TODO :
-    // > Check the type
-    // > Based on the type deserialize it
-    int resp_len = strlen(response);
 
-    buf_append(c->outgoing, &resp_len, 4);
+void buf_append_8(Buffer *buff, int8 data)
+{
+    buff_push((buff), data);
+}
+
+void buf_append_32(Buffer *buff, int32 data)
+{
+    buf_append(buff, &data, 4);
+}
+
+void buf_append_64(Buffer *buff, int64 data)
+{
+    buf_append(buff, &data, 8);
+}
+
+static void reply_string(Conn *c, char *response)
+{
+    size_t resp_len = strlen(response);
+    buf_append_8(c->outgoing, TYPE_STRING);
+    buf_append_32(c->outgoing, resp_len);
     buf_append(c->outgoing, response, resp_len);
 
     c->want_read = false;
     c->want_write = true;
 }
 
-static void close_conn(Conn *c, char *response)
+static void reply_nil(Conn *c)
 {
-    // TODO : append (error) in the beginning
-    reply(c, response);
-    c->want_close = true;
+    buf_append_8(c->outgoing, TYPE_NIL);
+
+    c->want_read = false;
+    c->want_write = true;
 }
 
+static void reply_int(Conn *c, int64 val)
+{
+    buf_append_8(c->outgoing, TYPE_INT);
+    buf_append_64(c->outgoing, val);
+
+    c->want_read = false;
+    c->want_write = true;
+}
+
+static void reply_error(Conn *c, ErrorType err_type, char *msg)
+{
+    // [type, err_code, strlen, str]
+    buf_append_8(c->outgoing, TYPE_ERROR);
+    buf_append_32(c->outgoing, err_type);
+
+    size_t msg_len = strlen(msg);
+    buf_append_32(c->outgoing, msg_len);
+    buf_append(c->outgoing, msg, msg_len);
+
+    c->want_read = false;
+    c->want_write = true;
+    // c->want_close = true;
+}
 
 bool entry_equal(HNode *a, HNode *b)
 {
@@ -62,9 +99,12 @@ Entry *get_entry(char *key)
     entry.node.hash = fnv_32a_str(entry.key, strlen(entry.key));
 
     HNode *found = hm_get(&map, &entry.node, entry_equal);
-    if (found == NULL) {
+    if (found == NULL)
+    {
         return NULL;
-    } else {
+    }
+    else
+    {
         return container_of(found, Entry, node);
     }
 }
@@ -86,7 +126,8 @@ int delete_entry(char *key)
     e.key = key;
     e.node.hash = fnv_32a_str(key, strlen(key));
     HNode *res_node = hm_delete(&map, &e.node, entry_equal);
-    if(res_node == NULL) return 0;
+    if (res_node == NULL)
+        return 0;
 
     Entry *res_entry = container_of(res_node, Entry, node);
     free(res_entry);
@@ -97,7 +138,7 @@ static void handle_get(Conn *c, Request *r)
 {
     if (r->nstrings != 2)
     {
-        reply(c, "ERR wrong number of arguments for 'get' command");
+        reply_error(c, ERR_UNKNOWN, "ERR wrong number of arguments for 'get' command");
         return;
     }
 
@@ -105,10 +146,13 @@ static void handle_get(Conn *c, Request *r)
     assert(key);
 
     Entry *entry = get_entry(key);
-    if(entry == NULL) {
-        reply(c, "(nil)");
-    } else {
-        reply(c, entry->value);
+    if (entry == NULL)
+    {
+        reply_nil(c);
+    }
+    else
+    {
+        reply_string(c, entry->value);
     }
 
     free(key);
@@ -118,7 +162,7 @@ static void handle_set(Conn *c, Request *r)
 {
     if (r->nstrings != 3)
     {
-        reply(c, "ERR wrong number of arguments for 'set' command");
+        reply_error(c, ERR_UNKNOWN, "ERR wrong number of arguments for 'set' command");
         return;
     }
 
@@ -129,19 +173,14 @@ static void handle_set(Conn *c, Request *r)
     assert(value);
 
     set_entry(key, value);
-
-    // check the value type (by delimeter)
-    // encode it to be entry with appropriate type
-
-    // map_set(&db, key, value);
-    reply(c, "OK");
+    reply_nil(c);
 }
 
 static void handle_delete(Conn *c, Request *r)
 {
     if (r->nstrings <= 1)
     {
-        reply(c, "ERR wrong number of arguments for 'del' command");
+        reply_error(c, ERR_UNKNOWN, "ERR wrong number of arguments for 'del' command");
         return;
     }
 
@@ -151,7 +190,8 @@ static void handle_delete(Conn *c, Request *r)
     key = read_next(r);
     while (key != NULL)
     {
-        if(delete_entry(key) > 0) {
+        if (delete_entry(key) > 0)
+        {
             ++deleted;
         }
 
@@ -159,13 +199,18 @@ static void handle_delete(Conn *c, Request *r)
         key = read_next(r);
     }
 
-    REPLY(c, "(integer) %zu", deleted);
+    reply_int(c, deleted);
 }
 
 bool process_one_request(Conn *conn, int8 *request, int len)
 {
     // payload = [nstrings, nchar, @@@... nchar, @@@...]
     Request *req = new_request(request, len);
+    if (req->nstrings > MAX_LENGTH)
+    {
+        reply_error(conn, ERR_TO_BIG, "Request length too big");
+        conn->want_close = true;
+    }
 
     char *data = read_next(req);
 
@@ -179,11 +224,24 @@ bool process_one_request(Conn *conn, int8 *request, int len)
         handle_delete(conn, req);
 
     else
-        close_conn(conn, "Bad Request");
+        reply_error(conn, ERR_UNKNOWN, "Unknown command");
 
     free(data);
     free_request(req);
     return true;
+}
+
+static void response_begin(Conn *c, size_t *curr_idx)
+{
+    *curr_idx = buff_len(c->outgoing);
+    // reserve 4 byte on the outgoing for the size
+    buf_append_32(c->outgoing, 0);
+}
+
+static void response_end(Conn *c, size_t curr_idx)
+{
+    size_t final_size = buff_len(c->outgoing) - curr_idx - 4;
+    memcpy(&buff_data(c->outgoing)[curr_idx], &final_size, 4);
 }
 
 bool try_one_request(Conn *c)
@@ -208,8 +266,14 @@ bool try_one_request(Conn *c)
     }
 
     int8 *request = &buff_data(c->incoming)[4];
+
+    size_t curr_idx = {0};
+    response_begin(c, &curr_idx);
     bool done = process_one_request(c, request, len);
+    response_end(c, curr_idx);
+
     buf_consume(c->incoming, 4 + len);
+
     return done;
 }
 
@@ -258,7 +322,7 @@ void read_all(Conn *c)
         return;
     }
 
-    buf_append(c->incoming, buff, sz);
+    buf_append(c->incoming, buff, (size_t)sz);
     while (try_one_request(c))
     {
     };
@@ -448,7 +512,6 @@ typedef struct
     size_t length;
 } EntryArray;
 
-
 void print_entry(Entry *e)
 {
     if (e == NULL)
@@ -458,5 +521,3 @@ void print_entry(Entry *e)
     }
     printf("%s\n", e->value);
 }
-
-

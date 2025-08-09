@@ -14,7 +14,13 @@ typedef enum {
     TYPE_BOOL,
     TYPE_STRING,
     TYPE_ARRAY,
+    TYPE_ERROR,
 } ValueType;
+
+typedef enum {
+    ERR_UNKNOWN,
+    ERR_TO_BIG
+} ErrorType;
 
 typedef struct
 {
@@ -37,7 +43,7 @@ typedef struct
 
 #define buf_append(buff, data, size) \
     do{ \
-        for (int i = 0; i < (size); ++i) \
+        for (size_t i = 0; i < (size); ++i) \
         { \
             buff_push((buff), ((char *)(data))[i]); \
         } \
