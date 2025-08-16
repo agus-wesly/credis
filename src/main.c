@@ -7,6 +7,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <time.h>
 
 #define PORT 5555
 #define HOST "localhost"
@@ -25,7 +26,6 @@ void msg(const char *message)
     fprintf(stderr, "%s\n", message);
 }
 
-
 void buf_append_8(Buffer *buff, int8 data)
 {
     buff_push((buff), data);
@@ -41,32 +41,31 @@ void buf_append_64(Buffer *buff, int64 data)
     buf_append(buff, &data, 8);
 }
 
-static void reply_string(Conn *c, char *response)
+static void out_string(Buffer *buff, char *data)
 {
-    size_t resp_len = strlen(response);
-    buf_append_8(c->outgoing, TYPE_STRING);
-    buf_append_32(c->outgoing, resp_len);
-    buf_append(c->outgoing, response, resp_len);
-
-    c->want_read = false;
-    c->want_write = true;
+    size_t resp_len = strlen(data);
+    buf_append_8(buff, TYPE_STRING);
+    buf_append_32(buff, resp_len);
+    buf_append(buff, data, resp_len);
 }
 
-static void reply_nil(Conn *c)
-{
-    buf_append_8(c->outgoing, TYPE_NIL);
 
-    c->want_read = false;
-    c->want_write = true;
+static void out_nil(Buffer *buff)
+{
+    buf_append_8(buff, TYPE_NIL);
+
 }
 
-static void reply_int(Conn *c, int64 val)
+static void out_int(Buffer *buff, int64 val)
 {
-    buf_append_8(c->outgoing, TYPE_INT);
-    buf_append_64(c->outgoing, val);
+    buf_append_8(buff, TYPE_INT);
+    buf_append_64(buff, val);
+}
 
-    c->want_read = false;
-    c->want_write = true;
+static void init_array(Buffer *buff, int32 length)
+{
+    buf_append_8(buff, TYPE_ARRAY);
+    buf_append_32(buff, length);
 }
 
 static void reply_error(Conn *c, ErrorType err_type, char *msg)
@@ -78,10 +77,6 @@ static void reply_error(Conn *c, ErrorType err_type, char *msg)
     size_t msg_len = strlen(msg);
     buf_append_32(c->outgoing, msg_len);
     buf_append(c->outgoing, msg, msg_len);
-
-    c->want_read = false;
-    c->want_write = true;
-    // c->want_close = true;
 }
 
 bool entry_equal(HNode *a, HNode *b)
@@ -117,7 +112,7 @@ void set_entry(char *key, char *value)
     ent->value = (char *)value;
 
     ent->node.hash = fnv_32a_str(ent->key, strlen(ent->key));
-    hm_set(&map, &ent->node);
+    hm_set(&map, &ent->node, entry_equal);
 }
 
 int delete_entry(char *key)
@@ -148,11 +143,11 @@ static void handle_get(Conn *c, Request *r)
     Entry *entry = get_entry(key);
     if (entry == NULL)
     {
-        reply_nil(c);
+        out_nil(c->outgoing);
     }
     else
     {
-        reply_string(c, entry->value);
+        out_string(c->outgoing, entry->value);
     }
 
     free(key);
@@ -173,7 +168,7 @@ static void handle_set(Conn *c, Request *r)
     assert(value);
 
     set_entry(key, value);
-    reply_nil(c);
+    out_nil(c->outgoing);
 }
 
 static void handle_delete(Conn *c, Request *r)
@@ -199,7 +194,38 @@ static void handle_delete(Conn *c, Request *r)
         key = read_next(r);
     }
 
-    reply_int(c, deleted);
+    out_int(c->outgoing, deleted);
+}
+
+void cb_keys(HNode *val, void *buff)
+{
+    Entry *entry = container_of(val, Entry, node);
+    out_string((Buffer *)buff, entry->key);
+}
+
+static void handle_keys(Conn *c, Request *r)
+{
+    if (r->nstrings != 1)
+    {
+        reply_error(c, ERR_UNKNOWN, "ERR wrong number of arguments for 'keys' command");
+        return;
+    }
+
+    size_t map_length = map.newer.length;
+    if (map.older.nodes != NULL)
+        map_length += map.older.length;
+
+    printf("TOTAL LENGTH : %zu\n", map_length);
+    init_array(c->outgoing, map_length);
+
+    // Loop over the map
+    ht_each(&map.newer, &cb_keys, c->outgoing);
+
+    if (map.older.nodes != NULL)
+        ht_each(&map.older, &cb_keys, c->outgoing);
+
+    c->want_read = false;
+    c->want_write = true;
 }
 
 bool process_one_request(Conn *conn, int8 *request, int len)
@@ -223,8 +249,14 @@ bool process_one_request(Conn *conn, int8 *request, int len)
     else if (strcmp(data, "DEL") == 0)
         handle_delete(conn, req);
 
+    else if (strcmp(data, "KEYS") == 0)
+        handle_keys(conn, req);
+
     else
         reply_error(conn, ERR_UNKNOWN, "Unknown command");
+
+    conn->want_read = false;
+    conn->want_write = true;
 
     free(data);
     free_request(req);
@@ -410,114 +442,147 @@ void free_conn(Conn *c)
     free(c);
 }
 
-int main()
-{
-    int fd = setup_connection();
-    struct pollfd *fds = NULL;
-    Conn **fd2conn = NULL;
+// int main2()
+// {
+//     int fd = setup_connection();
+//     struct pollfd *fds = NULL;
+//     Conn **fd2conn = NULL;
+// 
+//     arr_init(fds);
+//     arr_init(fd2conn);
+// 
+//     printf("Listening to port %d\n", PORT);
+//     for (;;)
+//     {
+//         arr_len(fds) = 0;
+// 
+//         struct pollfd pfd = {.fd = fd, .events = POLLIN, .revents = 0};
+//         arr_push(fds, pfd);
+// 
+//         for (int i = 0; i < arr_len(fd2conn); i++)
+//         {
+//             Conn *c = fd2conn[i];
+// 
+//             if (c == NULL)
+//                 continue;
+// 
+//             struct pollfd pfd = {.fd = c->fd, .events = POLLERR};
+//             if (c->want_read)
+//                 pfd.events |= POLLIN;
+//             if (c->want_write)
+//                 pfd.events |= POLLOUT;
+// 
+//             arr_push(fds, pfd);
+//         }
+// 
+//         int recv = poll(fds, arr_len(fds), -1);
+//         if (recv < 0 && errno == EINTR)
+//         {
+//             continue;
+//         }
+//         if (recv < 0)
+//         {
+//             die("poll()");
+//         }
+// 
+//         if (fds[0].revents)
+//         {
+//             Conn *c = handle_accept(fds);
+//             printf("Accepted : %d\n", c->fd);
+//             if (c->fd >= arr_len(fd2conn))
+//             {
+//                 while (arr_len(fd2conn) < c->fd)
+//                 {
+//                     arr_push(fd2conn, (void *)NULL);
+//                 }
+//                 arr_push(fd2conn, c);
+//             }
+//             else
+//             {
+//                 fd2conn[c->fd] = c;
+//             }
+//         }
+// 
+//         for (int i = 1; i < arr_len(fds); ++i)
+//         {
+//             short ready = fds[i].revents;
+//             if (ready == 0)
+//             {
+//                 continue;
+//             };
+// 
+//             Conn *c = fd2conn[fds[i].fd];
+//             assert(c != NULL);
+// 
+//             if (ready & POLLIN)
+//             {
+//                 read_all(c);
+//             }
+//             if (ready & POLLOUT)
+//             {
+//                 write_all(c);
+//             }
+//             if (ready & POLLERR || c->want_close)
+//             {
+//                 printf("Closing fd : %d...\n", c->fd);
+//                 close(c->fd);
+//                 fd2conn[c->fd] = NULL;
+//                 free_conn(c);
+//             }
+//         }
+//     }
+//     return EXIT_SUCCESS;
+// }
 
-    arr_init(fds);
-    arr_init(fd2conn);
 
-    printf("Listening to port %d\n", PORT);
-    for (;;)
-    {
-        arr_len(fds) = 0;
+typedef struct {
+    AVLNode node;
+    int value;
+} TEntry;
 
-        struct pollfd pfd = {.fd = fd, .events = POLLIN, .revents = 0};
-        arr_push(fds, pfd);
+#define container_of(ptr, type, attr) (type *)((char *)(ptr) - offsetof(type, attr));
 
-        for (int i = 0; i < arr_len(fd2conn); i++)
-        {
-            Conn *c = fd2conn[i];
 
-            if (c == NULL)
-                continue;
+AVLNode *root = NULL;
 
-            struct pollfd pfd = {.fd = c->fd, .events = POLLERR};
-            if (c->want_read)
-                pfd.events |= POLLIN;
-            if (c->want_write)
-                pfd.events |= POLLOUT;
+int compare_tree(AVLNode *left, AVLNode *right) {
+    TEntry *entry_left = container_of(left, TEntry, node);
+    TEntry *entry_right = container_of(right, TEntry, node);
 
-            arr_push(fds, pfd);
-        }
-
-        int recv = poll(fds, arr_len(fds), -1);
-        if (recv < 0 && errno == EINTR)
-        {
-            continue;
-        }
-        if (recv < 0)
-        {
-            die("poll()");
-        }
-
-        if (fds[0].revents)
-        {
-            Conn *c = handle_accept(fds);
-            printf("Accepted : %d\n", c->fd);
-            if (c->fd >= arr_len(fd2conn))
-            {
-                while (arr_len(fd2conn) < c->fd)
-                {
-                    arr_push(fd2conn, (void *)NULL);
-                }
-                arr_push(fd2conn, c);
-            }
-            else
-            {
-                fd2conn[c->fd] = c;
-            }
-        }
-
-        for (int i = 1; i < arr_len(fds); ++i)
-        {
-            short ready = fds[i].revents;
-            if (ready == 0)
-            {
-                continue;
-            };
-
-            Conn *c = fd2conn[fds[i].fd];
-            assert(c != NULL);
-
-            if (ready & POLLIN)
-            {
-                read_all(c);
-            }
-            if (ready & POLLOUT)
-            {
-                write_all(c);
-            }
-            if (ready & POLLERR || c->want_close)
-            {
-                printf("Closing fd : %d...\n", c->fd);
-                close(c->fd);
-                fd2conn[c->fd] = NULL;
-                free_conn(c);
-            }
-        }
-    }
-    return 0;
+    if(entry_left->value == entry_right->value ) return 0;
+    if(entry_left->value < entry_right->value ) return 1;
+    return -1;
 }
 
-typedef struct
-{
-    HNode node;
-    ValueType type;
-    char *key;
-    char *value;
+void add_tree_entry(int value) {
+    TEntry *entry = (TEntry *)malloc(sizeof(TEntry));
+    init_tree_node(&entry->node);
+    entry->value = value;
 
-    size_t length;
-} EntryArray;
-
-void print_entry(Entry *e)
-{
-    if (e == NULL)
-    {
-        printf("<null>\n");
-        return;
-    }
-    printf("%s\n", e->value);
+    add_tree_node(&root, &entry->node, compare_tree);
 }
+
+void remove_tree_entry(int value) {
+    TEntry entry;
+    init_tree_node(&entry.node);
+    entry.value = value;
+
+    AVLNode *removed = remove_tree_node(&root, &entry.node, compare_tree);
+    if(removed != NULL) {
+        TEntry *removed_entry = container_of(removed, TEntry, node);
+        free(removed_entry);
+    }
+}
+
+int cb(AVLNode *left) {
+    TEntry *entry = container_of(left, TEntry, node);
+    return entry->value;
+}
+
+void run_test();
+int main() {
+    printf("=== TEST: Binary Search Tree ===\n");
+    run_test();
+    return EXIT_SUCCESS;
+}
+

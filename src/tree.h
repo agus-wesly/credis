@@ -11,13 +11,11 @@ struct AVLNode {
 };
 
 void init_tree_node(AVLNode *node);
-void add_tree_node(AVLNode *new_node, int (*compare)(AVLNode *, AVLNode *));
-void display_tree(int (cb)(AVLNode *));
-AVLNode* remove_tree_node(AVLNode *node, AVLNode *key, int (*compare)(AVLNode *, AVLNode *));
-
-AVLNode *rot_left(AVLNode *node);
-AVLNode *rot_right(AVLNode *node);
+void add_tree_node(AVLNode **root, AVLNode *new_node, int (*compare)(AVLNode *, AVLNode *));
+void display_tree(AVLNode *root, int (cb)(AVLNode *));
+AVLNode* remove_tree_node(AVLNode **root, AVLNode *key, int (*compare)(AVLNode *, AVLNode *));
 int node_height(AVLNode *node);
-int node_balance_factor(AVLNode *node);
-AVLNode* avl_rebalance(AVLNode *node);
+
+// static AVLNode* avl_rebalance(AVLNode *node);
+
 #endif // TREE_H

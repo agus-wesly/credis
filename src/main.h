@@ -31,6 +31,14 @@ typedef struct
     char *value;
 } Entry;
 
+// struct {
+// AVLNode **root_tree; -> index by score and name
+// HNode **root_map; -> retrieve by name
+//
+// char *key;
+// char *value;
+// } SortedSet
+
 typedef struct
 {
     int fd;
@@ -53,12 +61,12 @@ typedef struct
 
 
 #define buf_consume(arr, n) \
-do{ \
-    for (int i = 0; i < n; ++i) \
-    { \
-        buff_pop_front((arr)); \
-    } \
-} while(0); \
+    do{ \
+        for (int i = 0; i < n; ++i) \
+        { \
+            buff_pop_front((arr)); \
+        } \
+    } while(0); \
 
 
 #define REPLY(c, ...) \
