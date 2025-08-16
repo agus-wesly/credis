@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stddef.h>
+#include <stdarg.h>
 
 typedef unsigned int int32;
 typedef unsigned long int64;

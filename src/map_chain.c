@@ -43,7 +43,6 @@ static void ht_set(HTab *ht, HNode *value)
 {
     int32 idx = value->hash & (ht->capacity - 1);
     HNode *node = ht->nodes[idx];
-
     value->next = node;
     ht->nodes[idx] = value;
     ht->length++;
@@ -87,11 +86,28 @@ void hm_trigger_rehash(HMap *hm)
     ht_init(&hm->newer, new_cap);
 }
 
-void hm_set(HMap *hm, HNode *value)
+void ht_each(HTab *ht, void(cb)(HNode *node, void *ptr), void *arg)
+{
+    for (size_t i = 0; i < ht->capacity; ++i)
+    {
+        HNode **from = &ht->nodes[i];
+        for (HNode *curr; (curr = *from) != NULL; from = &curr->next)
+        {
+            cb(curr, arg);
+        }
+    }
+}
+
+void hm_set(HMap *hm, HNode *value, bool (*eq)(HNode *left, HNode *right))
 {
     if (hm->newer.nodes == NULL)
         ht_init(&hm->newer, 8);
 
+    HNode **found_ptr = ht_lookup(&hm->newer, value, eq);
+    if (found_ptr != NULL)
+    {
+        ht_detach(&hm->newer, found_ptr);
+    }
     ht_set(&hm->newer, value);
 
     if (hm->newer.length > (hm->newer.capacity * GROW_FACTOR))
@@ -151,12 +167,10 @@ HNode *hm_delete(HMap *hm, HNode *node, bool (*find)(HNode *, HNode *))
     return ht_detach(&hm->newer, from);
 }
 
-
-
 // int main2()
 // {
 //     init_map(&map);
-// 
+//
 //     if (true)
 //     {
 //         assert(map.older.nodes == NULL);
@@ -183,7 +197,7 @@ HNode *hm_delete(HMap *hm, HNode *node, bool (*find)(HNode *, HNode *))
 //         }
 //         return EXIT_SUCCESS;
 //     }
-// 
+//
 //     char str[20];
 //     for (int i = 0; i < 10000; ++i)
 //     {
@@ -192,7 +206,7 @@ HNode *hm_delete(HMap *hm, HNode *node, bool (*find)(HNode *, HNode *))
 //         set_entry(str, str);
 //     }
 //     printf("Capacity : %zu, Length : %zu\n", map.newer.length, map.newer.capacity);
-// 
+//
 //     for (int i = 500; i < 1000; ++i)
 //     {
 //         memset(str, 0, sizeof(str));
@@ -200,7 +214,7 @@ HNode *hm_delete(HMap *hm, HNode *node, bool (*find)(HNode *, HNode *))
 //         delete_entry(str);
 //     }
 //     printf("Capacity : %zu, Length : %zu\n", map.newer.length, map.newer.capacity);
-// 
+//
 //     for (int i = 2000; i < 10000; ++i)
 //     {
 //         memset(str, 0, sizeof(str));
@@ -211,6 +225,16 @@ HNode *hm_delete(HMap *hm, HNode *node, bool (*find)(HNode *, HNode *))
 //     }
 //     printf("\n");
 //     printf("Capacity : %zu, Length : %zu\n", map.newer.length, map.newer.capacity);
-// 
+//
 //     return 0;
+// }
+//
+// void print_entry(Entry *e)
+// {
+//     if (e == NULL)
+//     {
+//         printf("<null>\n");
+//         return;
+//     }
+//     printf("%s\n", e->value);
 // }

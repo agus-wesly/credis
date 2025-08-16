@@ -38,6 +38,7 @@ void delete_node(HMap *hm, HNode *node, bool (*find)());
 HNode **ht_lookup(HTab *ht, HNode *node, bool (*find)(HNode *, HNode *));
 HNode *hm_get(HMap *hm, HNode *node, bool (*find)(HNode *, HNode *));
 HNode *hm_delete(HMap *hm, HNode *node, bool (*find)(HNode *, HNode *));
-void hm_set(HMap *hm, HNode *value);
+void hm_set(HMap *hm, HNode *value, bool (*eq)(HNode *left, HNode *right));
+void ht_each(HTab *ht, void(cb)(HNode *node, void *ptr), void *arg);
 
 #endif
