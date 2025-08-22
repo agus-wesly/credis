@@ -9,6 +9,8 @@
 #include <string.h>
 #include <stddef.h>
 #include <stdarg.h>
+#include <ctype.h>
+#include "math.h"
 
 typedef unsigned int int32;
 typedef unsigned long int64;

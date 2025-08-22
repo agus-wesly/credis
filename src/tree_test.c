@@ -1,7 +1,8 @@
 #include "tree.h"
 #include <time.h>
 
-extern AVLNode *root;
+static AVLNode *root = NULL;
+
 void add_tree_entry(int value);
 int cb(AVLNode *left);
 void remove_tree_entry(int value);
@@ -161,7 +162,7 @@ void test_insert_patterns() {
 
     printf("\n=== Random Insert Test ===\n");
     int nums[] = {15, 25, 5, 18, 30, 2, 8, 12, 19};
-    for (int i = 0; i < sizeof(nums) / sizeof(nums[0]); i++) {
+    for (int i = 0; i < (int)sizeof(nums) / (int)sizeof(nums[0]); i++) {
         add_tree_entry(nums[i]);
         // display_tree(root, cb);
     }

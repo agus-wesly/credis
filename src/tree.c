@@ -1,5 +1,4 @@
 #include "tree.h"
-#include "math.h"
 
 void init_tree_node(AVLNode *node) {
     node->left = NULL;
@@ -28,7 +27,6 @@ AVLNode **find_tree_node(AVLNode **base, AVLNode *node, int (*compare)(AVLNode *
     assert(0 && "Unreachable");
 }
 
-// TODO
 static void update_height(AVLNode *node) {
     if (node == NULL) return;
     node->height = 1 + fmax(node_height(node->left), node_height(node->right));
@@ -116,6 +114,8 @@ void add_tree_node(AVLNode **p_root, AVLNode *new_node, int (*compare)(AVLNode *
         *find = new_node;
         update_height(*p_root);
         *p_root = avl_rebalance(*p_root);
+    } else {
+        printf("Already added\n");
     }
 }
 
@@ -179,6 +179,14 @@ static void print_node(AVLNode *node, int level, int(cb)(AVLNode *)) {
 void display_tree(AVLNode *root, int(cb)(AVLNode *)) { print_node(root, 0, cb); printf("===================================\n"); }
 
 int node_height(AVLNode *node){
-    if(node == NULL) return 0;
+    if (node == NULL) return 0;
     return 1 + fmax(node_height(node->left), node_height(node->right));
+}
+
+void dfs_tree(AVLNode *node, void (cb) (AVLNode *, void *userdata), void *userdata) {
+    if (node == NULL) return;
+    
+    dfs_tree(node->left, cb, userdata);
+    cb(node, userdata);
+    dfs_tree(node->right, cb, userdata);
 }

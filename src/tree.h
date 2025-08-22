@@ -15,6 +15,7 @@ void add_tree_node(AVLNode **root, AVLNode *new_node, int (*compare)(AVLNode *, 
 void display_tree(AVLNode *root, int (cb)(AVLNode *));
 AVLNode* remove_tree_node(AVLNode **root, AVLNode *key, int (*compare)(AVLNode *, AVLNode *));
 int node_height(AVLNode *node);
+void dfs_tree(AVLNode *node, void (cb) (AVLNode *, void *userdata), void *userdata);
 
 // static AVLNode* avl_rebalance(AVLNode *node);
 

@@ -6,9 +6,8 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <sys/types.h>
-#include <unistd.h>
+#include <unistd.h> 
 #include <time.h>
-
 #define PORT 5555
 #define HOST "localhost"
 #define MAX_LENGTH 32 << 21
@@ -53,7 +52,6 @@ static void out_string(Buffer *buff, char *data)
 static void out_nil(Buffer *buff)
 {
     buf_append_8(buff, TYPE_NIL);
-
 }
 
 static void out_int(Buffer *buff, int64 val)
@@ -79,7 +77,8 @@ static void reply_error(Conn *c, ErrorType err_type, char *msg)
     buf_append(c->outgoing, msg, msg_len);
 }
 
-bool entry_equal(HNode *a, HNode *b)
+
+bool en_eq(HNode *a, HNode *b)
 {
     Entry *first = container_of(a, Entry, node);
     Entry *second = container_of(b, Entry, node);
@@ -87,13 +86,13 @@ bool entry_equal(HNode *a, HNode *b)
     return strcmp(first->key, second->key) == 0;
 }
 
-Entry *get_entry(char *key)
+Entry *entry_get_from_map(char *key)
 {
     Entry entry = {0};
     entry.key = key;
     entry.node.hash = fnv_32a_str(entry.key, strlen(entry.key));
 
-    HNode *found = hm_get(&map, &entry.node, entry_equal);
+    HNode *found = hm_get(&map, &entry.node, en_eq);
     if (found == NULL)
     {
         return NULL;
@@ -104,15 +103,34 @@ Entry *get_entry(char *key)
     }
 }
 
-void set_entry(char *key, char *value)
-{
+Entry *new_entry_string(char *key, char *value ) {
     Entry *ent = malloc(sizeof(Entry));
 
-    ent->key = (char *)key;
-    ent->value = (char *)value;
+    size_t len = strlen(key) + 1;
+    char *new_str = (char *)malloc(len);
+    memcpy(new_str, key, len); 
+    ent->key = new_str;
+
+    ent->type = ENTRY_STRING;
+    ent->str = (char *)value;
 
     ent->node.hash = fnv_32a_str(ent->key, strlen(ent->key));
-    hm_set(&map, &ent->node, entry_equal);
+    return ent;
+}
+
+Entry *new_entry_set(char *key) {
+    Entry *ent = malloc(sizeof(Entry));
+
+    size_t len = strlen(key) + 1;
+    char *new_str = (char *)malloc(len);
+    memcpy(new_str, key, len); 
+    ent->key = new_str;
+
+    ent->type = ENTRY_SET;
+    ent->set = new_sorted_set();
+
+    ent->node.hash = fnv_32a_str(ent->key, strlen(ent->key));
+    return ent;
 }
 
 int delete_entry(char *key)
@@ -120,7 +138,7 @@ int delete_entry(char *key)
     Entry e;
     e.key = key;
     e.node.hash = fnv_32a_str(key, strlen(key));
-    HNode *res_node = hm_delete(&map, &e.node, entry_equal);
+    HNode *res_node = hm_delete(&map, &e.node, en_eq);
     if (res_node == NULL)
         return 0;
 
@@ -140,14 +158,21 @@ static void handle_get(Conn *c, Request *r)
     char *key = read_next(r);
     assert(key);
 
-    Entry *entry = get_entry(key);
+    Entry *entry = entry_get_from_map(key);
     if (entry == NULL)
     {
         out_nil(c->outgoing);
     }
     else
     {
-        out_string(c->outgoing, entry->value);
+        if (IS_ENTRY_STRING(entry)) {
+            out_string(c->outgoing, entry->str);
+        } else if(IS_ENTRY_SET(entry)) {
+            assert(0 && "TODO : stringify the set");
+        }
+        else {
+            assert(0 && "Unexpected");
+        }
     }
 
     free(key);
@@ -167,7 +192,8 @@ static void handle_set(Conn *c, Request *r)
     char *value = read_next(r);
     assert(value);
 
-    set_entry(key, value);
+    Entry *e = new_entry_string(key, value);
+    hm_set(&map, &e->node, en_eq);
     out_nil(c->outgoing);
 }
 
@@ -228,6 +254,248 @@ static void handle_keys(Conn *c, Request *r)
     c->want_write = true;
 }
 
+static bool char2float(char *score, float *data) {
+    char *endptr;
+    errno = 0;
+    float res = strtof(score, &endptr);
+
+    if (score == endptr) return false;
+
+    while (*endptr != '\0') {
+        if (isspace((unsigned char)*endptr)) return false;
+        endptr++;
+    }
+
+    if (errno == ERANGE) return false;
+
+    *data = res;
+    return true;
+}
+
+static void handle_z_add(Conn *c, Request *r) {
+    // ZADD <set_name> <score> <key>
+    if (r->nstrings != 4) {
+        reply_error(c, ERR_UNKNOWN, "ERR wrong number of arguments for 'zadd' command");
+        return;
+    }
+    char *set_key = read_next(r);
+    char *score = read_next(r);
+    char *key = read_next(r);
+
+    Entry *entry = entry_get_from_map(set_key);
+    if (entry == NULL) {
+        entry  = new_entry_set(set_key);
+        hm_set(&map, &entry->node, en_eq);
+        out_int(c->outgoing, 1);
+    } else {
+        if (!IS_ENTRY_SET(entry)) {
+            reply_error(c, ERR_UNKNOWN, "Entry must be a set");
+            return;
+        }
+
+    }
+
+    SortedSet *set = entry->set;
+    float data = {0};
+    if (!char2float(score, &data)) {
+        reply_error(c, ERR_UNKNOWN, "value is not a valid float");
+    } else {
+        int ret = zset_add(set, data, key, strlen(key));
+        out_int(c->outgoing, ret);
+    }
+
+    free(set_key);
+    free(score);
+    free(key);
+}
+
+static void handle_z_rem(Conn *c, Request *r) {
+    // ZREM <set_name> <key>
+    if (r->nstrings != 3) {
+        reply_error(c, ERR_UNKNOWN, "ERR wrong number of arguments for command");
+        return;
+    }
+    char *set_key = read_next(r);
+    char *key = read_next(r);
+
+    Entry *entry = entry_get_from_map(set_key);   
+    if (entry == NULL) {
+        entry  = new_entry_set(set_key);
+        hm_set(&map, &entry->node, en_eq);
+        out_nil(c->outgoing);
+    } else {
+        SortedSet *s = entry->set;
+        if (!zset_rem(s, key, strlen(key))) {
+            out_int(c->outgoing, 0);
+        } else {
+            out_int(c->outgoing, 1);
+        }
+    }
+
+    free(set_key);
+    free(key);
+}
+
+typedef struct {Conn *c; char *msg;} Param;
+void snode_send_display(AVLNode *node, void *userdata) {
+    Param *p = (Param *)userdata;
+
+    SEntry *t = container_of(node, SEntry, tree_node);
+
+    char msg[512];
+    memset(msg, '\0', 512);
+    sprintf(msg, "%s\n%f\n=======\n", t->key, t->score);
+    strncat(p->msg, msg, strlen(msg));
+
+}
+
+bool s_entry_less_than(SEntry *s_entry, float score, char *key) {
+    if (s_entry->score != score) {
+        return s_entry->score < score;
+    }
+    int res = memcmp(s_entry->key, key, fmin(strlen(key), strlen(s_entry->key)));
+    return res < 0;
+}
+
+bool s_entry_greater_equal_than(SEntry *s_entry, float score, char *key) {
+    return s_entry->score >= score;
+}
+
+// find >=
+static AVLNode *find_upper_boundary(AVLNode *root, float score, char *key) {
+    AVLNode *find = root;
+    while (find != NULL) {
+        SEntry *s_entry = container_of(find, SEntry, tree_node);
+        if (s_entry_less_than(s_entry, score, key)) {
+            find = find->right;
+        } else {
+            printf("Upper boundary score : %f\n", s_entry->score);
+            break;
+        }
+    }
+    return find;
+}
+
+
+static AVLNode *find_lower_boundary(AVLNode *root, float score, char *key) {
+    AVLNode *find = root;
+    while (find != NULL && find->left != NULL) {
+        SEntry *s_entry = container_of(find->left, SEntry, tree_node);
+        if (s_entry_greater_equal_than(s_entry, score, key)) {
+            find = find->left;
+        } else {
+            printf("Lower boundary score : %f\n", s_entry->score);
+            break;
+        }
+    }
+    return find;
+}
+
+void dfs_tree_with_boundary(AVLNode *node, AVLNode *lower, void (display)(AVLNode *node, void *userdata), Param *p) {
+    if (node == NULL) return;
+    if (node == lower) {
+        display(node, p);
+        dfs_tree(node->right, display, p);
+    } else {
+        dfs_tree_with_boundary(node->left, lower, display, p);
+        display(node, p);
+        dfs_tree_with_boundary(node->right, lower, display, p);
+    }
+}
+
+static void handle_z_query(Conn *c, Request *r) {
+    // ZQUERY <set_name> <score> <key> <offset> <limit>
+
+    if (r->nstrings != 6) {
+        reply_error(c, ERR_UNKNOWN, "ERR wrong number of arguments for 'zquery' command");
+        return;
+    }
+
+    char *set_key = read_next(r);
+    char *score = read_next(r);
+    char *key = read_next(r);
+    char *offset = read_next(r);
+    char *limit = read_next(r);
+
+    float f_score;
+    float f_offset;
+    float f_limit;
+
+    if (!char2float(score, &f_score)) {
+        reply_error(c, ERR_UNKNOWN, "'score' is not a valid float");
+    };
+    if (!char2float(offset, &f_offset)) {
+        reply_error(c, ERR_UNKNOWN, "'offset' is not a valid float");
+    };
+    if (!char2float(limit, &f_limit)) {
+        reply_error(c, ERR_UNKNOWN, "'limit' is not a valid float");
+    };
+
+    /*
+     * 1) key 
+     * 2) value
+     */
+
+    Entry *entry = entry_get_from_map(set_key);
+    if (entry == NULL) {
+        out_nil(c->outgoing);
+    } else {
+        SortedSet *set = entry->set;
+
+        char msg[512];
+        memset(msg, '\0', 512);
+        Param p = {c, msg};
+        AVLNode *upper = find_upper_boundary(set->by_score, f_score, key);
+        if (upper == NULL) {
+            out_nil(c->outgoing);
+        } else {
+            // For now assume no limit
+            AVLNode *lower = find_lower_boundary(upper, f_score, key);
+            if (lower == NULL) {
+                dfs_tree(upper, snode_send_display, &p);
+            } else {
+                dfs_tree_with_boundary(upper, lower, snode_send_display, &p);
+            }
+            out_string(c->outgoing, msg);
+        }
+    }
+
+    free(set_key);
+    free(score);
+    free(key);
+    free(offset);
+    free(limit);
+}
+
+static void handle_z_score(Conn *c, Request *r) {
+    // ZSCORE <set_name> <key> -> score
+    if (r->nstrings != 3) {
+        reply_error(c, ERR_UNKNOWN, "ERR wrong number of arguments for 'zscore' command");
+        return;
+    }
+
+    char *set_key = read_next(r);
+    char *key = read_next(r);
+
+    Entry *entry = entry_get_from_map(set_key);
+    if (entry == NULL) {
+        out_nil(c->outgoing);
+    } else {
+        SortedSet *s = entry->set;
+        SEntry *s_entry = zset_lookup_map(s, key, strlen(key)); 
+        if (s_entry == NULL) {
+            out_nil(c->outgoing);
+        } else {
+            char buff[128];
+            sprintf(buff, "%f", s_entry->score);
+            out_string(c->outgoing, buff);
+        }
+    }
+
+    free(set_key);
+    free(key);
+}
+
 bool process_one_request(Conn *conn, int8 *request, int len)
 {
     // payload = [nstrings, nchar, @@@... nchar, @@@...]
@@ -251,6 +519,18 @@ bool process_one_request(Conn *conn, int8 *request, int len)
 
     else if (strcmp(data, "KEYS") == 0)
         handle_keys(conn, req);
+
+    else if(strcmp(data, "ZADD") == 0) 
+        handle_z_add(conn, req);
+
+    else if(strcmp(data, "ZQUERY") == 0) 
+        handle_z_query(conn, req);
+
+    else if(strcmp(data, "ZREM") == 0) 
+        handle_z_rem(conn, req);
+
+    else if(strcmp(data, "ZSCORE") == 0) 
+        handle_z_score(conn, req);
 
     else
         reply_error(conn, ERR_UNKNOWN, "Unknown command");
@@ -442,147 +722,101 @@ void free_conn(Conn *c)
     free(c);
 }
 
-// int main2()
-// {
-//     int fd = setup_connection();
-//     struct pollfd *fds = NULL;
-//     Conn **fd2conn = NULL;
-// 
-//     arr_init(fds);
-//     arr_init(fd2conn);
-// 
-//     printf("Listening to port %d\n", PORT);
-//     for (;;)
-//     {
-//         arr_len(fds) = 0;
-// 
-//         struct pollfd pfd = {.fd = fd, .events = POLLIN, .revents = 0};
-//         arr_push(fds, pfd);
-// 
-//         for (int i = 0; i < arr_len(fd2conn); i++)
-//         {
-//             Conn *c = fd2conn[i];
-// 
-//             if (c == NULL)
-//                 continue;
-// 
-//             struct pollfd pfd = {.fd = c->fd, .events = POLLERR};
-//             if (c->want_read)
-//                 pfd.events |= POLLIN;
-//             if (c->want_write)
-//                 pfd.events |= POLLOUT;
-// 
-//             arr_push(fds, pfd);
-//         }
-// 
-//         int recv = poll(fds, arr_len(fds), -1);
-//         if (recv < 0 && errno == EINTR)
-//         {
-//             continue;
-//         }
-//         if (recv < 0)
-//         {
-//             die("poll()");
-//         }
-// 
-//         if (fds[0].revents)
-//         {
-//             Conn *c = handle_accept(fds);
-//             printf("Accepted : %d\n", c->fd);
-//             if (c->fd >= arr_len(fd2conn))
-//             {
-//                 while (arr_len(fd2conn) < c->fd)
-//                 {
-//                     arr_push(fd2conn, (void *)NULL);
-//                 }
-//                 arr_push(fd2conn, c);
-//             }
-//             else
-//             {
-//                 fd2conn[c->fd] = c;
-//             }
-//         }
-// 
-//         for (int i = 1; i < arr_len(fds); ++i)
-//         {
-//             short ready = fds[i].revents;
-//             if (ready == 0)
-//             {
-//                 continue;
-//             };
-// 
-//             Conn *c = fd2conn[fds[i].fd];
-//             assert(c != NULL);
-// 
-//             if (ready & POLLIN)
-//             {
-//                 read_all(c);
-//             }
-//             if (ready & POLLOUT)
-//             {
-//                 write_all(c);
-//             }
-//             if (ready & POLLERR || c->want_close)
-//             {
-//                 printf("Closing fd : %d...\n", c->fd);
-//                 close(c->fd);
-//                 fd2conn[c->fd] = NULL;
-//                 free_conn(c);
-//             }
-//         }
-//     }
-//     return EXIT_SUCCESS;
-// }
+int main()
+{
+    int fd = setup_connection();
+    struct pollfd *fds = NULL;
+    Conn **fd2conn = NULL;
 
+    arr_init(fds);
+    arr_init(fd2conn);
 
-typedef struct {
-    AVLNode node;
-    int value;
-} TEntry;
+    printf("Listening to port %d\n", PORT);
+    for (;;)
+    {
+        arr_len(fds) = 0;
 
-#define container_of(ptr, type, attr) (type *)((char *)(ptr) - offsetof(type, attr));
+        struct pollfd pfd = {.fd = fd, .events = POLLIN, .revents = 0};
+        arr_push(fds, pfd);
 
+        for (int i = 0; i < arr_len(fd2conn); i++)
+        {
+            Conn *c = fd2conn[i];
 
-AVLNode *root = NULL;
+            if (c == NULL)
+                continue;
 
-int compare_tree(AVLNode *left, AVLNode *right) {
-    TEntry *entry_left = container_of(left, TEntry, node);
-    TEntry *entry_right = container_of(right, TEntry, node);
+            struct pollfd pfd = {.fd = c->fd, .events = POLLERR};
+            if (c->want_read)
+                pfd.events |= POLLIN;
+            if (c->want_write)
+                pfd.events |= POLLOUT;
 
-    if(entry_left->value == entry_right->value ) return 0;
-    if(entry_left->value < entry_right->value ) return 1;
-    return -1;
-}
+            arr_push(fds, pfd);
+        }
 
-void add_tree_entry(int value) {
-    TEntry *entry = (TEntry *)malloc(sizeof(TEntry));
-    init_tree_node(&entry->node);
-    entry->value = value;
+        int recv = poll(fds, arr_len(fds), -1);
+        if (recv < 0 && errno == EINTR)
+        {
+            continue;
+        }
+        if (recv < 0)
+        {
+            die("poll()");
+        }
 
-    add_tree_node(&root, &entry->node, compare_tree);
-}
+        if (fds[0].revents)
+        {
+            Conn *c = handle_accept(fds);
+            printf("Accepted : %d\n", c->fd);
+            if (c->fd >= arr_len(fd2conn))
+            {
+                while (arr_len(fd2conn) < c->fd)
+                {
+                    arr_push(fd2conn, (void *)NULL);
+                }
+                arr_push(fd2conn, c);
+            }
+            else
+            {
+                fd2conn[c->fd] = c;
+            }
+        }
 
-void remove_tree_entry(int value) {
-    TEntry entry;
-    init_tree_node(&entry.node);
-    entry.value = value;
+        for (int i = 1; i < arr_len(fds); ++i)
+        {
+            short ready = fds[i].revents;
+            if (ready == 0)
+            {
+                continue;
+            };
 
-    AVLNode *removed = remove_tree_node(&root, &entry.node, compare_tree);
-    if(removed != NULL) {
-        TEntry *removed_entry = container_of(removed, TEntry, node);
-        free(removed_entry);
+            Conn *c = fd2conn[fds[i].fd];
+            assert(c != NULL);
+
+            if (ready & POLLIN)
+            {
+                read_all(c);
+            }
+            if (ready & POLLOUT)
+            {
+                write_all(c);
+            }
+            if (ready & POLLERR || c->want_close)
+            {
+                printf("Closing fd : %d...\n", c->fd);
+                close(c->fd);
+                fd2conn[c->fd] = NULL;
+                free_conn(c);
+            }
+        }
     }
-}
-
-int cb(AVLNode *left) {
-    TEntry *entry = container_of(left, TEntry, node);
-    return entry->value;
-}
-
-void run_test();
-int main() {
-    printf("=== TEST: Binary Search Tree ===\n");
-    run_test();
     return EXIT_SUCCESS;
 }
+
+
+
+// Structure the Entry struct properly
+// Entry => string, sorted_set
+// Each in their own file
 

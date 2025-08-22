@@ -1,0 +1,27 @@
+#include "common.h"
+#include "tree.h"
+#include "map_chain.h"
+
+#ifndef SORTED_SET_H
+#define SORTED_SET_H
+
+typedef struct {
+    AVLNode *by_score;
+    HMap by_name;
+} SortedSet;
+
+typedef struct {
+    AVLNode tree_node;
+    HNode h_node;
+
+    float score;
+    size_t length;
+    char key[];
+} SEntry;
+
+SortedSet * new_sorted_set();
+int zset_add(SortedSet *s, float score, char *key, size_t length);
+bool zset_rem(SortedSet *s, char *key, size_t length);
+SEntry *zset_lookup_map(SortedSet *s, char *key, size_t length);
+
+#endif

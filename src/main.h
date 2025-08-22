@@ -1,7 +1,6 @@
 #include "buffer.h"
-
-#include "map_chain.h" 
 #include "dynamic_array.h"
+#include "entry.h"
 #include "request.h"
 #include "tree.h"
 
@@ -19,25 +18,12 @@ typedef enum {
     TYPE_ERROR,
 } ValueType;
 
+
 typedef enum {
     ERR_UNKNOWN,
     ERR_TO_BIG
 } ErrorType;
 
-typedef struct
-{
-    HNode node;
-    char *key;
-    char *value;
-} Entry;
-
-// struct {
-// AVLNode **root_tree; -> index by score and name
-// HNode **root_map; -> retrieve by name
-//
-// char *key;
-// char *value;
-// } SortedSet
 
 typedef struct
 {

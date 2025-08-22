@@ -33,7 +33,6 @@ typedef struct
 
 
 void init_map(HMap *);
-void add_node(HMap *ht, HNode *value);
 void delete_node(HMap *hm, HNode *node, bool (*find)());
 HNode **ht_lookup(HTab *ht, HNode *node, bool (*find)(HNode *, HNode *));
 HNode *hm_get(HMap *hm, HNode *node, bool (*find)(HNode *, HNode *));

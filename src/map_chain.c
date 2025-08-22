@@ -123,7 +123,8 @@ HNode *hm_get(HMap *hm, HNode *node, bool (*find)(HNode *, HNode *))
     HNode **found_ptr = ht_lookup(&hm->newer, node, find);
     if (found_ptr == NULL)
     {
-        found_ptr = ht_lookup(&hm->newer, node, find);
+        // this
+        found_ptr = ht_lookup(&hm->older, node, find);
     }
     if (found_ptr == NULL)
         return NULL;
