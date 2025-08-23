@@ -387,7 +387,6 @@ static AVLNode *find_upper_boundary(AVLNode *root, float score, char *key) {
         if (s_entry_less_than(s_entry, score, key)) {
             find = find->right;
         } else {
-            printf("Upper boundary score : %f\n", s_entry->score);
             break;
         }
     }
@@ -401,7 +400,6 @@ static AVLNode *find_lower_boundary(AVLNode *root, float score) {
         if (s_entry_greater_equal_than(s_entry, score)) {
             find = find->left;
         } else {
-            printf("Lower boundary score : %f\n", s_entry->score);
             break;
         }
     }
@@ -436,6 +434,7 @@ static void handle_z_query(Conn *c, Request *r) {
     if (!char2int(limit, &i_limit)) {
         reply_error(c, ERR_UNKNOWN, "'limit' is not a valid int");
     };
+    if (i_limit == 0) i_limit = -1; // if user provide 0, than it means no limit
 
     /*
      * 1) key 
@@ -457,9 +456,9 @@ static void handle_z_query(Conn *c, Request *r) {
         } else {
             AVLNode *lower = find_lower_boundary(upper, f_score);
             if (lower == NULL) {
-                dfs_tree(upper, snode_send_display, &p, &i_offset);
+                dfs_tree(upper, snode_send_display, &p, &i_offset, &i_limit);
             } else {
-                dfs_tree_with_boundary(upper, lower, snode_send_display, &p, &i_offset);
+                dfs_tree_with_boundary(upper, lower, snode_send_display, &p, &i_offset, &i_limit);
             }
             out_string(c->outgoing, msg);
         }
