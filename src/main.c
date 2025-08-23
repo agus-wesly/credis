@@ -254,12 +254,30 @@ static void handle_keys(Conn *c, Request *r)
     c->want_write = true;
 }
 
-static bool char2float(char *score, float *data) {
+static bool char2float(char *chardata, float *data) {
     char *endptr;
     errno = 0;
-    float res = strtof(score, &endptr);
+    float res = strtof(chardata, &endptr);
 
-    if (score == endptr) return false;
+    if (chardata == endptr) return false;
+
+    while (*endptr != '\0') {
+        if (isspace((unsigned char)*endptr)) return false;
+        endptr++;
+    }
+
+    if (errno == ERANGE) return false;
+
+    *data = res;
+    return true;
+}
+
+static bool char2int(char *chardata, int *data) {
+    char *endptr;
+    errno = 0;
+    float res = strtol(chardata, &endptr, 10);
+
+    if (chardata == endptr) return false;
 
     while (*endptr != '\0') {
         if (isspace((unsigned char)*endptr)) return false;
@@ -357,7 +375,7 @@ bool s_entry_less_than(SEntry *s_entry, float score, char *key) {
     return res < 0;
 }
 
-bool s_entry_greater_equal_than(SEntry *s_entry, float score, char *key) {
+bool s_entry_greater_equal_than(SEntry *s_entry, float score) {
     return s_entry->score >= score;
 }
 
@@ -376,12 +394,11 @@ static AVLNode *find_upper_boundary(AVLNode *root, float score, char *key) {
     return find;
 }
 
-
-static AVLNode *find_lower_boundary(AVLNode *root, float score, char *key) {
+static AVLNode *find_lower_boundary(AVLNode *root, float score) {
     AVLNode *find = root;
     while (find != NULL && find->left != NULL) {
         SEntry *s_entry = container_of(find->left, SEntry, tree_node);
-        if (s_entry_greater_equal_than(s_entry, score, key)) {
+        if (s_entry_greater_equal_than(s_entry, score)) {
             find = find->left;
         } else {
             printf("Lower boundary score : %f\n", s_entry->score);
@@ -391,17 +408,6 @@ static AVLNode *find_lower_boundary(AVLNode *root, float score, char *key) {
     return find;
 }
 
-void dfs_tree_with_boundary(AVLNode *node, AVLNode *lower, void (display)(AVLNode *node, void *userdata), Param *p) {
-    if (node == NULL) return;
-    if (node == lower) {
-        display(node, p);
-        dfs_tree(node->right, display, p);
-    } else {
-        dfs_tree_with_boundary(node->left, lower, display, p);
-        display(node, p);
-        dfs_tree_with_boundary(node->right, lower, display, p);
-    }
-}
 
 static void handle_z_query(Conn *c, Request *r) {
     // ZQUERY <set_name> <score> <key> <offset> <limit>
@@ -418,17 +424,17 @@ static void handle_z_query(Conn *c, Request *r) {
     char *limit = read_next(r);
 
     float f_score;
-    float f_offset;
-    float f_limit;
+    int i_offset;
+    int i_limit;
 
     if (!char2float(score, &f_score)) {
         reply_error(c, ERR_UNKNOWN, "'score' is not a valid float");
     };
-    if (!char2float(offset, &f_offset)) {
-        reply_error(c, ERR_UNKNOWN, "'offset' is not a valid float");
+    if (!char2int(offset, &i_offset)) {
+        reply_error(c, ERR_UNKNOWN, "'offset' is not a valid int");
     };
-    if (!char2float(limit, &f_limit)) {
-        reply_error(c, ERR_UNKNOWN, "'limit' is not a valid float");
+    if (!char2int(limit, &i_limit)) {
+        reply_error(c, ERR_UNKNOWN, "'limit' is not a valid int");
     };
 
     /*
@@ -449,12 +455,11 @@ static void handle_z_query(Conn *c, Request *r) {
         if (upper == NULL) {
             out_nil(c->outgoing);
         } else {
-            // For now assume no limit
-            AVLNode *lower = find_lower_boundary(upper, f_score, key);
+            AVLNode *lower = find_lower_boundary(upper, f_score);
             if (lower == NULL) {
-                dfs_tree(upper, snode_send_display, &p);
+                dfs_tree(upper, snode_send_display, &p, &i_offset);
             } else {
-                dfs_tree_with_boundary(upper, lower, snode_send_display, &p);
+                dfs_tree_with_boundary(upper, lower, snode_send_display, &p, &i_offset);
             }
             out_string(c->outgoing, msg);
         }

@@ -183,10 +183,22 @@ int node_height(AVLNode *node){
     return 1 + fmax(node_height(node->left), node_height(node->right));
 }
 
-void dfs_tree(AVLNode *node, void (cb) (AVLNode *, void *userdata), void *userdata) {
+void dfs_tree(AVLNode *node, void (cb) (AVLNode *, void *userdata), void *userdata, int *offset) {
     if (node == NULL) return;
-    
-    dfs_tree(node->left, cb, userdata);
-    cb(node, userdata);
-    dfs_tree(node->right, cb, userdata);
+
+    dfs_tree(node->left, cb, userdata, offset);
+    withoffset(node, cb, userdata, offset);
+    dfs_tree(node->right, cb, userdata, offset);
+}
+
+void dfs_tree_with_boundary(AVLNode *node, AVLNode *lower, void (display)(AVLNode *node, void *userdata), void *p, int *offset) {
+    if (node == NULL) return;
+    if (node == lower) {
+        withoffset(node, display, p, offset);
+        dfs_tree(node->right, display, p, offset);
+    } else {
+        dfs_tree_with_boundary(node->left, lower, display, p, offset);
+        withoffset(node, display, p, offset);
+        dfs_tree_with_boundary(node->right, lower, display, p, offset);
+    }
 }
