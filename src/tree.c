@@ -124,8 +124,22 @@ static AVLNode* avl_rebalance(AVLNode *node) {
     }
 }
 
+AVLNode* search(AVLNode **root, AVLNode *target, int (*compare)(AVLNode *, AVLNode *)) {
+    AVLNode **from = root;
+    for (AVLNode *node = *from; node != NULL;) {
+        int r = compare(target, node);
+        if (r == 0) return target;
 
-void add_tree_node(AVLNode **root, AVLNode *new_node, int (*less_than)(AVLNode *, AVLNode *)) {
+        if (r  < 1) 
+            from = &((*from)->left) ; // target < node
+        else 
+            from = &((*from)->right); // target > node
+        node = *from;
+    }
+    return NULL;
+}
+
+void search_and_insert(AVLNode **root, AVLNode *new_node, int (*less_than)(AVLNode *, AVLNode *)) {
     AVLNode *parent = NULL;
     AVLNode **from = root;
     for (AVLNode *node = *from; node != NULL;) {
@@ -173,8 +187,62 @@ void node_detach(AVLNode **p_node) {
     }
 }
 
+AVLNode *avl_detach_easy(AVLNode *node) {
+    assert(!node->left || !node->right);
+
+    AVLNode **from = &node;
+    AVLNode *parent = node->parent;
+    AVLNode *target = node->left ? node->left : node->right;
+    if (target) {
+        target->parent = parent;
+    }
+    if (!parent) {
+        return target;
+    } 
+    from = (node == parent->left) ? &parent->left : &parent->right;
+    *from = target;
+    return avl_rebalance(parent);
+}
+
+// Should return root
+AVLNode *avl_detach(AVLNode *node) {
+    if (!node->left || !node->right) 
+        return avl_detach_easy(node);
+
+    AVLNode *victim = node->right;
+    while (victim->left) {
+        victim = victim->left;
+    }
+    AVLNode *root = avl_detach_easy(victim);
+    *victim = *node;
+    if (victim->left) {
+        victim->left->parent = victim;
+    }
+    if (victim->right) {
+        victim->right->parent = victim;
+    }
+    AVLNode **from = &root;
+    AVLNode *parent = node->parent;
+    if (parent) {
+        from = (node == parent->left) ? &parent->left : &parent->right;
+    }
+    *from = victim;
+    return root;
+}
+
 // TODO 
-AVLNode* remove_tree_node(AVLNode **p_root, AVLNode *key, int (*compare)(AVLNode *, AVLNode *)) {
+AVLNode* search_and_delete(AVLNode **root, AVLNode *key, int (*compare)(AVLNode *, AVLNode *)) {
+    for (AVLNode *node = *root; node;) {
+        int r = compare(node, key);
+        if (r < 0) {
+            node = node->right; // node < key
+        } else if (r > 0) {
+            node = node->left; // node > key
+        } else {
+            *root = avl_detach(node);
+            return node;
+        }
+    }
     return NULL;
 }
 

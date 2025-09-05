@@ -28,9 +28,10 @@ struct AVLNode {
     } while(0);\
 
 void init_tree_node(AVLNode *node);
-void add_tree_node(AVLNode **root, AVLNode *new_node, int (*compare)(AVLNode *, AVLNode *));
+AVLNode* search(AVLNode **root, AVLNode *target, int (*compare)(AVLNode *, AVLNode *));
+void search_and_insert(AVLNode **root, AVLNode *new_node, int (*compare)(AVLNode *, AVLNode *));
 void display_tree(AVLNode *root, int (cb)(AVLNode *));
-AVLNode* remove_tree_node(AVLNode **root, AVLNode *key, int (*compare)(AVLNode *, AVLNode *));
+AVLNode* search_and_delete(AVLNode **root, AVLNode *key, int (*compare)(AVLNode *, AVLNode *));
 // int node_height(AVLNode *node);
 void dfs_tree(AVLNode *node, void (cb) (AVLNode *, void *userdata), void *userdata, int *offset, int *limit);
 void dfs_tree_with_boundary(AVLNode *node, AVLNode *lower, void (display)(AVLNode *node, void *userdata), void *p, int *offset, int *limit);

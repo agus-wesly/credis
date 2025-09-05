@@ -9,8 +9,14 @@ int compare_tree(AVLNode *left, AVLNode *right) {
     TEntry *entry_right = container_of(right, TEntry, node);
 
     if (entry_left->value == entry_right->value ) return 0;
-    if (entry_left->value < entry_right->value ) return 1;
-    return 0;
+    if (entry_left->value < entry_right->value ) return -1;
+    return 1;
+}
+
+int ent_less_than(AVLNode *left, AVLNode *right) {
+    TEntry *entry_left = container_of(left, TEntry, node);
+    TEntry *entry_right = container_of(right, TEntry, node);
+    return entry_left->value < entry_right->value;
 }
 
 void add_tree_entry(AVLNode **root, int value) {
@@ -18,16 +24,19 @@ void add_tree_entry(AVLNode **root, int value) {
     init_tree_node(&entry->node);
     entry->value = value;
 
-    add_tree_node(root, &entry->node, compare_tree);
+    // Query and check if already there
+    if (search(root, &entry->node, compare_tree) == NULL) {
+        search_and_insert(root, &entry->node, ent_less_than);
+    }
 }
 
-void remove_tree_entry(AVLNode *root, int value) {
+void remove_tree_entry(AVLNode **root, int value) {
     TEntry entry;
     init_tree_node(&entry.node);
     entry.value = value;
 
-    AVLNode *removed = remove_tree_node(&root, &entry.node, compare_tree);
-    if(removed != NULL) {
+    AVLNode *removed = search_and_delete(root, &entry.node, compare_tree);
+    if (removed != NULL) {
         TEntry *removed_entry = container_of(removed, TEntry, node);
         free(removed_entry);
     }
@@ -85,12 +94,12 @@ SEntry *zset_lookup_map(SortedSet *s, char *key, size_t length) {
 
 void zset_update(SortedSet *s, SEntry *entry, float new_score) {
     if (entry->score == new_score) return;
-    AVLNode *removed = remove_tree_node(&s->by_score, &entry->tree_node, less_than);
+    AVLNode *removed = search_and_delete(&s->by_score, &entry->tree_node, less_than);
     assert(removed != NULL && "Should have something to removed");
 
     entry = container_of(removed, SEntry, tree_node);
     entry->score = new_score;
-    add_tree_node(&s->by_score, &entry->tree_node, less_than);
+    search_and_insert(&s->by_score, &entry->tree_node, less_than);
 }
 
 int zset_add(SortedSet *s, float score, char *key, size_t length) {
@@ -102,7 +111,7 @@ int zset_add(SortedSet *s, float score, char *key, size_t length) {
     SEntry *new_entry = new_sorted_entry(score, key, length);
     // Tree
     init_tree_node(&new_entry->tree_node);
-    add_tree_node(&s->by_score, &new_entry->tree_node, less_than);
+    search_and_insert(&s->by_score, &new_entry->tree_node, less_than);
     // Map
     new_entry->h_node.hash = fnv_32a_str(key, length);
     new_entry->h_node.next = NULL;
@@ -118,7 +127,7 @@ bool zset_rem(SortedSet *s, char *key, size_t length) {
     if (entry == NULL) {
         return false;
     }
-    remove_tree_node(&s->by_score, &entry->tree_node, less_than);
+    search_and_delete(&s->by_score, &entry->tree_node, less_than);
     hm_delete(&s->by_name, &entry->h_node, hn_eq);
     return true;
 }

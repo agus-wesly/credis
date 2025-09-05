@@ -8,7 +8,6 @@ static int cb(AVLNode *left) {
     return ent->value;
 
 }
-void remove_tree_entry(int value);
 
 // void test_individual() {
 //     if(true){
@@ -153,72 +152,71 @@ void test_insert_patterns(AVLNode **root) {
         printf("\n=== Ascending Insert Test ===\n");
         for (int i = 1; i <= 10; i++) {
             add_tree_entry(root, i);
-            display_tree(*root, cb);
+        }
+        for (int i = 1; i <= 10; i++) {
+            add_tree_entry(root, i);
         }
     }
-
-    return;
 
     printf("\n=== Descending Insert Test ===\n");
     for (int i = 20; i >= 11; i--) {
         add_tree_entry(root, i);
-        display_tree(*root, cb);
     }
 
     printf("\n=== Random Insert Test ===\n");
     int nums[] = {15, 25, 5, 18, 30, 2, 8, 12, 19};
     for (int i = 0; i < (int)sizeof(nums) / (int)sizeof(nums[0]); i++) {
         add_tree_entry(root, nums[i]);
+    }
+
+    display_tree(*root, cb);
+}
+
+void test_removal_patterns(AVLNode **root) {
+    printf("\n=== Remove => %d ===\n", 2);
+    remove_tree_entry(root, 2); // leaf
+    display_tree(*root, cb);
+
+    printf("\n=== Remove %d ===\n", 8);
+    remove_tree_entry(root, 8); // should have one child in many AVL setups
+    display_tree(*root, cb);
+
+    printf("\n=== Remove %d ===\n", 15);
+    remove_tree_entry(root, 15); 
+    display_tree(*root, cb);
+
+    printf("\n=== Remove %d ===\n", 999);
+    remove_tree_entry(root, 999); 
+    display_tree(*root, cb);
+
+    printf("\n=== Remove From Empty Tree ===\n");
+    // Remove all
+    for (int i = 1; i <= 30; i++)
+        remove_tree_entry(root, i); // try again on empty tree
+
+    display_tree(*root, cb);
+}
+
+void stress_random_ops(AVLNode **root, int count) {
+    printf("\n=== Random Stress Test (%d ops) ===\n", count);
+    srand(time(NULL));
+    for (int i = 0; i < count; i++) {
+        int op = rand() % 2;
+        int val = rand() % 100;
+        if (op == 0) {
+            printf("Insert %d\n", val);
+            add_tree_entry(root, val);
+        } else {
+            printf("Remove %d\n", val);
+            remove_tree_entry(root, val);
+        }
         display_tree(*root, cb);
     }
 }
 
-// void test_removal_patterns() {
-//     printf("\n=== Remove => %d ===\n", 2);
-//     remove_tree_entry(2); // leaf
-//     display_tree(root, cb);
-// 
-//     printf("\n=== Remove %d ===\n", 8);
-//     remove_tree_entry(8); // should have one child in many AVL setups
-//     display_tree(root, cb);
-// 
-//     printf("\n=== Remove %d ===\n", 15);
-//     remove_tree_entry(15); 
-//     display_tree(root, cb);
-// 
-//     printf("\n=== Remove %d ===\n", 999);
-//     remove_tree_entry(999); 
-//     display_tree(root, cb);
-// 
-//     printf("\n=== Remove From Empty Tree ===\n");
-//     // Remove all
-//     for (int i = 1; i <= 30; i++)
-//         remove_tree_entry(i); // try again on empty tree
-//     display_tree(root, cb);
-// }
-// 
-// 
-// void stress_random_ops(int count) {
-//     printf("\n=== Random Stress Test (%d ops) ===\n", count);
-//     srand(time(NULL));
-//     for (int i = 0; i < count; i++) {
-//         int op = rand() % 2;
-//         int val = rand() % 100;
-//         if (op == 0) {
-//             printf("Insert %d\n", val);
-//             add_tree_entry(val);
-//         } else {
-//             printf("Remove %d\n", val);
-//             remove_tree_entry(val);
-//         }
-//         display_tree(root, cb);
-//     }
-// }
-
 void run_test() {
     SortedSet *s = new_sorted_set();
     test_insert_patterns(&s->by_score);
-    // display_tree(root, cb);
-    // test_removal_patterns();
-    // stress_random_ops(6969);
+    test_removal_patterns(&s->by_score);
+    stress_random_ops(&s->by_score, 6969);
 }
