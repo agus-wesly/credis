@@ -1,29 +1,24 @@
 #include "sorted_set.h"
 
-typedef struct {
-    AVLNode node;
-    int value;
-} TEntry;
 
 #define container_of(ptr, type, attr) (type *)((char *)(ptr) - offsetof(type, attr));
 
-// AVLNode *root = NULL;
-
+// TODO : check this
 int compare_tree(AVLNode *left, AVLNode *right) {
     TEntry *entry_left = container_of(left, TEntry, node);
     TEntry *entry_right = container_of(right, TEntry, node);
 
-    if(entry_left->value == entry_right->value ) return 0;
-    if(entry_left->value < entry_right->value ) return 1;
-    return -1;
+    if (entry_left->value == entry_right->value ) return 0;
+    if (entry_left->value < entry_right->value ) return 1;
+    return 0;
 }
 
-void add_tree_entry(AVLNode *root, int value) {
+void add_tree_entry(AVLNode **root, int value) {
     TEntry *entry = (TEntry *)malloc(sizeof(TEntry));
     init_tree_node(&entry->node);
     entry->value = value;
 
-    add_tree_node(&root, &entry->node, compare_tree);
+    add_tree_node(root, &entry->node, compare_tree);
 }
 
 void remove_tree_entry(AVLNode *root, int value) {
@@ -36,11 +31,6 @@ void remove_tree_entry(AVLNode *root, int value) {
         TEntry *removed_entry = container_of(removed, TEntry, node);
         free(removed_entry);
     }
-}
-
-int cb(AVLNode *left) {
-    TEntry *entry = container_of(left, TEntry, node);
-    return entry->value;
 }
 
 SortedSet *new_sorted_set() {
@@ -66,7 +56,7 @@ int less_than(AVLNode *a, AVLNode *b) {
         return first->score < second->score ? 1 : -1;
     }
     // check the name 
-    int res = memcmp(second->key, first->key, fmin(strlen(first->key), strlen(second->key)));
+    int res = memcmp(second->key, first->key, fmax(strlen(first->key), strlen(second->key)));
     if(res < 0) return -1;
     if(res > 0) return 1;
     return 0;

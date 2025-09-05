@@ -19,9 +19,15 @@ typedef struct {
     char key[];
 } SEntry;
 
+typedef struct {
+    AVLNode node;
+    int value;
+} TEntry;
+
 SortedSet * new_sorted_set();
 int zset_add(SortedSet *s, float score, char *key, size_t length);
 bool zset_rem(SortedSet *s, char *key, size_t length);
 SEntry *zset_lookup_map(SortedSet *s, char *key, size_t length);
+void add_tree_entry(AVLNode **root, int value);
 
 #endif

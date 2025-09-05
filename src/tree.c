@@ -1,9 +1,8 @@
 #include "tree.h"
 
-void init_tree_node(AVLNode *node) {
-    node->left = NULL;
-    node->right = NULL;
-    node->height = 0;
+inline void init_tree_node(AVLNode *node) {
+    node->left = node->right = node->parent = NULL;
+    node->height = 1;
 }
 
 // compare => 0 same, 1 right larger, otherwise -1
@@ -27,34 +26,52 @@ AVLNode **find_tree_node(AVLNode **base, AVLNode *node, int (*compare)(AVLNode *
     assert(0 && "Unreachable");
 }
 
-static void update_height(AVLNode *node) {
-    if (node == NULL) return;
-    node->height = 1 + fmax(node_height(node->left), node_height(node->right));
+static int avl_height(AVLNode *node){
+    if (node == NULL) return 0;
+    return node->height;
 }
 
-static int node_balance_factor(AVLNode *node) {
-    return (node_height(node->left) - node_height(node->right));
+static void avl_update(AVLNode *node) {
+    if (node == NULL) return;
+    node->height = 1 + fmax(avl_height(node->left), avl_height(node->right));
 }
+
 
 static AVLNode *rot_left(AVLNode *node) {
+    AVLNode *parent = node->parent;
     AVLNode *new_node = node->right;
     AVLNode *inner = new_node->left;
-    new_node->left = node;
-    node->right = inner;
 
-    update_height(node);
-    update_height(new_node);
+    new_node->left = node;
+    node->parent = new_node;
+
+    node->right = inner;
+    if (inner) {
+        inner->parent = node;
+    }
+    new_node->parent = parent;
+
+    avl_update(node);
+    avl_update(new_node);
     return new_node;
 }
 
 static AVLNode *rot_right(AVLNode *node) {
+    AVLNode *parent = node->parent;
     AVLNode *new_node = node->left;
     AVLNode *inner = new_node->right;
-    new_node->right = node;
-    node->left = inner;
 
-    update_height(node);
-    update_height(new_node);
+    new_node->right = node;
+    node->parent = new_node;
+
+    node->left = inner;
+    if (inner) {
+        inner->parent = node;
+    }
+    new_node->parent = parent;
+
+    avl_update(node);
+    avl_update(new_node);
     return new_node;
 }
 
@@ -68,55 +85,57 @@ AVLNode* rot_right_left(AVLNode *node){
     return rot_left(node);
 }
 
-
-
-static AVLNode* avl_rebalance(AVLNode *node) {
-    if (node == NULL) return NULL;
-
-    if (node->left != NULL) {
-        node->left = avl_rebalance(node->left);
+static AVLNode* avl_fix_left(AVLNode *node) {
+    if (avl_height(node->left->left) < avl_height(node->left->right)) {
+        node->left = rot_left(node->left);
     }
-    if (node->right != NULL) {
-        node->right = avl_rebalance(node->right);
-    }
-
-    // LL => Balance factor : > 1, left : >= 0 => rot_right(node)
-    // LR => Balance factor : > 1, left : < 0 => rot_left(node.left); rot_right(node)
-    // RR => Balance factor : < -1, right : >= 0
-    // RL => Balance factor : < -1, right : > 0
-
-    if (node_balance_factor(node) > 1) {
-        if(node_balance_factor(node->left) >= 0){
-            printf("ll rotation...\n"); 
-            AVLNode *new_node = rot_right(node);
-            return new_node;
-        } else {
-            printf("lr rotation...\n"); 
-            return rot_left_right(node);
-        }
-    }
-    if(node_balance_factor(node) < -1) {
-        if(node_balance_factor(node->right) <= 0) {
-            printf("rr rotation...\n"); 
-            AVLNode *new_node = rot_left(node);
-            return new_node;
-        } else {
-            printf("rl rotation...\n"); 
-            return rot_right_left(node);
-        }
-    }
-    return node;
+    return rot_right(node);
 }
 
-void add_tree_node(AVLNode **p_root, AVLNode *new_node, int (*compare)(AVLNode *, AVLNode *)) {
-    AVLNode **find = find_tree_node(p_root, new_node, compare);
-    if((*find) == NULL) {
-        *find = new_node;
-        update_height(*p_root);
-        *p_root = avl_rebalance(*p_root);
-    } else {
-        printf("Already added\n");
+static AVLNode *avl_fix_right(AVLNode *node) {
+    if (avl_height(node->right->right) < avl_height(node->right->left)) {
+        node->right = rot_right(node->right);
     }
+    return rot_left(node);
+}
+
+static AVLNode* avl_rebalance(AVLNode *node) {
+    while (true) {
+        AVLNode **from = &node;
+        AVLNode *parent = node->parent; // Can be NULL
+
+        if (parent)  {
+            from = parent->left == node ? &parent->left : &parent->right;
+        }
+        avl_update(node);
+        int l = avl_height(node->left);
+        int r = avl_height(node->right);
+
+        if (l == r + 2) {
+            *from = avl_fix_left(node);
+        } else if (l + 2 == r) {
+            *from = avl_fix_right(node);
+        }
+        if (parent == NULL) {
+            return *from;
+        }
+
+        node = parent;
+    }
+}
+
+
+void add_tree_node(AVLNode **root, AVLNode *new_node, int (*less_than)(AVLNode *, AVLNode *)) {
+    AVLNode *parent = NULL;
+    AVLNode **from = root;
+    for (AVLNode *node = *from; node != NULL;) {
+        from = less_than(new_node, node) ? &((*from)->left) : &((*from)->right);
+        parent = node;
+        node = *from;
+    }
+    *from = new_node;
+    new_node->parent = parent;
+    *root = avl_rebalance(new_node);
 }
 
 AVLNode **find_smallest(AVLNode **target) {
@@ -154,16 +173,9 @@ void node_detach(AVLNode **p_node) {
     }
 }
 
+// TODO 
 AVLNode* remove_tree_node(AVLNode **p_root, AVLNode *key, int (*compare)(AVLNode *, AVLNode *)) {
-    AVLNode **find = find_tree_node(p_root, key, compare);
-    AVLNode *founded = *find;
-    if (founded == NULL) return NULL;
-
-    node_detach(find);
-    update_height(*p_root);
-    *p_root = avl_rebalance(*p_root);
-
-    return founded;
+    return NULL;
 }
 
 static void print_node(AVLNode *node, int level, int(cb)(AVLNode *)) {
@@ -178,10 +190,6 @@ static void print_node(AVLNode *node, int level, int(cb)(AVLNode *)) {
 
 void display_tree(AVLNode *root, int(cb)(AVLNode *)) { print_node(root, 0, cb); printf("===================================\n"); }
 
-int node_height(AVLNode *node){
-    if (node == NULL) return 0;
-    return 1 + fmax(node_height(node->left), node_height(node->right));
-}
 
 void dfs_tree(AVLNode *node, void (cb) (AVLNode *, void *userdata), void *userdata, int *offset, int *limit) {
     if (node == NULL) return;
@@ -194,8 +202,8 @@ void dfs_tree(AVLNode *node, void (cb) (AVLNode *, void *userdata), void *userda
 void dfs_tree_with_boundary(AVLNode *node, AVLNode *lower, void (display)(AVLNode *node, void *userdata), void *p, int *offset, int *limit) {
     if (node == NULL) return;
     if (node == lower) {
-        with_offset_and_limit(node, display, p, offset, limit);
-        dfs_tree(node->right, display, p, offset, limit);
+        return;
+        // dfs_tree(node->right, display, p, offset, limit);
     } else {
         dfs_tree_with_boundary(node->left, lower, display, p, offset, limit);
         with_offset_and_limit(node, display, p, offset, limit);
