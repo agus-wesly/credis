@@ -248,8 +248,6 @@ static void handle_keys(Conn *c, Request *r)
     if (map.older.nodes != NULL)
         map_length += map.older.length;
 
-    printf("TOTAL LENGTH : %zu\n", map_length);
-
     size_t ctx = init_array(c->outgoing);
     ht_each(&map.newer, &cb_keys, c->outgoing);
     if (map.older.nodes != NULL)
@@ -437,11 +435,6 @@ static void handle_z_query(Conn *c, Request *r) {
     };
     if (i_limit == 0) i_limit = -1; // if user provide 0, than it means no limit
 
-    /*
-     * 1) key 
-     * 2) value
-     */
-
     Entry *entry = entry_get_from_map(set_key);
     if (entry == NULL) {
         out_nil(c->outgoing);
@@ -451,19 +444,19 @@ static void handle_z_query(Conn *c, Request *r) {
             ZNode *curr = zset_find_ge(set, f_score, key, strlen(key));
             AVLNode *target = avl_offset(&curr->tree_node, i_offset);
             size_t arr_ctx = init_array(c->outgoing);
-            size_t i = 0;
+            size_t l = 0;
             while (i_limit > 0) {
                 if (!target) break;
                 ZNode *node = container_of(target, ZNode, tree_node);
-
-                printf("%s, %f\n", node->key, node->score);
+                // printf("%s, %f\n", node->key, node->score);
                 out_string(c->outgoing, node->key);
                 out_int(c->outgoing, node->score);
-                i += 2;
+                l += 2;
+
                 target = avl_offset(target, +1);
                 --i_limit;
             }
-            end_array(arr_ctx, c->outgoing, i);
+            end_array(arr_ctx, c->outgoing, l);
         }
     }
 
