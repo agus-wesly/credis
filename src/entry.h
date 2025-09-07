@@ -18,7 +18,7 @@ typedef struct
     HNode node;
     char *key;
     union {
-        SortedSet *set;
+        ZSet *set;
         char *str;
     };
 } Entry;

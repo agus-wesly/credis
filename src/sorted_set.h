@@ -8,7 +8,7 @@
 typedef struct {
     AVLNode *by_score;
     HMap by_name;
-} SortedSet;
+} ZSet;
 
 typedef struct {
     AVLNode tree_node;
@@ -17,18 +17,18 @@ typedef struct {
     float score;
     size_t length;
     char key[];
-} SEntry;
+} ZNode;
 
 typedef struct {
     AVLNode node;
     int value;
 } TEntry;
 
-SortedSet * new_sorted_set();
-int zset_add(SortedSet *s, float score, char *key, size_t length);
-bool zset_rem(SortedSet *s, char *key, size_t length);
-SEntry *zset_lookup_map(SortedSet *s, char *key, size_t length);
+ZSet * new_sorted_set();
+int zset_add(ZSet *s, float score, char *key, size_t length);
+bool zset_rem(ZSet *s, char *key, size_t length);
+ZNode *zset_hm_lookup(ZSet *s, char *key, size_t length);
 void add_tree_entry(AVLNode **root, int value);
 void remove_tree_entry(AVLNode **root, int value);
-
+TEntry *znode_offset(AVLNode *node, int offset);
 #endif

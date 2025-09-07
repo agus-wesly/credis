@@ -36,6 +36,10 @@ static void avl_update(AVLNode *node) {
     node->height = 1 + fmax(avl_height(node->left), avl_height(node->right));
 }
 
+AVLNode *avl_offset(AVLNode *node, int offset) {
+
+}
+
 
 static AVLNode *rot_left(AVLNode *node) {
     AVLNode *parent = node->parent;

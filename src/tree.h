@@ -35,5 +35,7 @@ AVLNode* search_and_delete(AVLNode **root, AVLNode *key, int (*compare)(AVLNode 
 // int node_height(AVLNode *node);
 void dfs_tree(AVLNode *node, void (cb) (AVLNode *, void *userdata), void *userdata, int *offset, int *limit);
 void dfs_tree_with_boundary(AVLNode *node, AVLNode *lower, void (display)(AVLNode *node, void *userdata), void *p, int *offset, int *limit);
+AVLNode *avl_detach(AVLNode *node);
+AVLNode *avl_offset(AVLNode *node, int offset);
 
 #endif // TREE_H

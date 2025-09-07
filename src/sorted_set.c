@@ -42,8 +42,8 @@ void remove_tree_entry(AVLNode **root, int value) {
     }
 }
 
-SortedSet *new_sorted_set() {
-    SortedSet *s = malloc(sizeof(SortedSet));
+ZSet *new_sorted_set() {
+    ZSet *s = malloc(sizeof(ZSet));
     s->by_score = NULL;
     init_map(&s->by_name);
     return s;
@@ -51,84 +51,106 @@ SortedSet *new_sorted_set() {
 
 bool hn_eq(HNode *a, HNode *b)
 {
-    SEntry *first = container_of(a, SEntry, h_node);
-    SEntry *second = container_of(b, SEntry, h_node);
-
-    return memcmp(first->key, second->key, fmin(strlen(first->key), strlen(second->key))) == 0;
+    ZNode *first = container_of(a, ZNode, h_node);
+    ZNode *second = container_of(b, ZNode, h_node);
+    if (first->length != second->length) return false;
+    return 0 == memcmp(first->key, second->key, strlen(first->key));
 }
 
-int less_than(AVLNode *a, AVLNode *b) {
-    SEntry *first = container_of(a, SEntry, tree_node);
-    SEntry *second = container_of(b, SEntry, tree_node);
+int compare(AVLNode *a, AVLNode *b) {
+    ZNode *first = container_of(a, ZNode, tree_node);
+    ZNode *second = container_of(b, ZNode, tree_node);
 
     if (first->score != second->score) {
-        return first->score < second->score ? 1 : -1;
+        return first->score < second->score ? -1 : 1;
     }
     // check the name 
-    int res = memcmp(second->key, first->key, fmax(strlen(first->key), strlen(second->key)));
+    int res = memcmp(first->key, second->key, fmax(strlen(first->key), strlen(second->key)));
     if(res < 0) return -1;
     if(res > 0) return 1;
     return 0;
 }
 
-SEntry* new_sorted_entry(float score, char *key, size_t length) {
-    SEntry *entry = (SEntry *)malloc(sizeof(SEntry) + length + 1);
-    entry->score = score;
-    entry->length = length;
-    memcpy(&entry->key[0], key, length);
-    entry->key[length] = '\0';
-    return entry;
+int less_than(AVLNode *a, AVLNode *b) {
+    ZNode *first = container_of(a, ZNode, tree_node);
+    ZNode *second = container_of(b, ZNode, tree_node);
+
+    if (first->score != second->score) {
+        return first->score < second->score;
+    }
+    // check the name 
+    int res = memcmp(first->key, second->key, fmax(strlen(first->key), strlen(second->key)));
+    return res < 0;
 }
 
-SEntry *zset_lookup_map(SortedSet *s, char *key, size_t length) {
+ZNode* znode_new(float score, char *key, size_t length) {
+    ZNode *node = (ZNode *)malloc(sizeof(ZNode) + length + 1);
+    node->score = score;
+    node->length = length;
+    memcpy(&node->key[0], key, length);
+    node->key[length] = '\0';
+
+    // Tree
+    init_tree_node(&node->tree_node);
+    // Map
+    node->h_node.hash = fnv_32a_str(key, length);
+    node->h_node.next = NULL;
+    return node;
+}
+
+void znode_del(ZNode *node) {
+    free(node);
+}
+
+TEntry *znode_offset(AVLNode *node, int offset) {
+    AVLNode *offseted = avl_offset(node, offset);
+    TEntry *ent = container_of(offseted, TEntry, node);
+    return ent;
+}
+
+ZNode *zset_hm_lookup(ZSet *s, char *key, size_t length) {
     if (s->by_name.newer.length == 0) return NULL;
 
-    SEntry entry;
+    ZNode entry;
     entry.h_node.hash = fnv_32a_str(key, length);
     entry.h_node.next = NULL;
     
     HNode *found_ptr = hm_get(&s->by_name, &entry.h_node, hn_eq);
     if (found_ptr == NULL) return NULL;
-    return container_of(found_ptr, SEntry, h_node);
+    return container_of(found_ptr, ZNode, h_node);
 }
 
-void zset_update(SortedSet *s, SEntry *entry, float new_score) {
+void zset_update(ZSet *s, ZNode *entry, float new_score) {
     if (entry->score == new_score) return;
-    AVLNode *removed = search_and_delete(&s->by_score, &entry->tree_node, less_than);
-    assert(removed != NULL && "Should have something to removed");
-
-    entry = container_of(removed, SEntry, tree_node);
+    s->by_score = avl_detach(&entry->tree_node);
+    init_tree_node(&entry->tree_node);
     entry->score = new_score;
-    search_and_insert(&s->by_score, &entry->tree_node, less_than);
+    search_and_insert(&s->by_score, &entry->tree_node, compare);
 }
 
-int zset_add(SortedSet *s, float score, char *key, size_t length) {
-    SEntry *entry = zset_lookup_map(s, key, length);
+int zset_add(ZSet *s, float score, char *key, size_t length) {
+    ZNode *entry = zset_hm_lookup(s, key, length);
     if (entry != NULL) {
         zset_update(s, entry, score);
         return 0;
     }
-    SEntry *new_entry = new_sorted_entry(score, key, length);
-    // Tree
-    init_tree_node(&new_entry->tree_node);
-    search_and_insert(&s->by_score, &new_entry->tree_node, less_than);
-    // Map
-    new_entry->h_node.hash = fnv_32a_str(key, length);
-    new_entry->h_node.next = NULL;
-
+    ZNode *new_entry = znode_new(score, key, length);
+    search_and_insert(&s->by_score, &new_entry->tree_node, compare);
     hm_set(&s->by_name, &new_entry->h_node, hn_eq);
     return 1;
 }
 
-bool zset_rem(SortedSet *s, char *key, size_t length) {
-    // Cannot search on the hashmap
-    // Because it can be more than one
-    SEntry *entry = zset_lookup_map(s, key, length);
+bool zset_rem(ZSet *s, char *key, size_t length) {
+    ZNode *entry = zset_hm_lookup(s, key, length);
     if (entry == NULL) {
         return false;
     }
-    search_and_delete(&s->by_score, &entry->tree_node, less_than);
     hm_delete(&s->by_name, &entry->h_node, hn_eq);
+    AVLNode *avl_deleted = search_and_delete(&s->by_score, &entry->tree_node, less_than);
+    if (avl_deleted) {
+        ZNode *del = container_of(avl_deleted, ZNode, tree_node);
+        znode_del(del);
+    }
     return true;
 }
 
