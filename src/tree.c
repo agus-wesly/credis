@@ -279,7 +279,6 @@ AVLNode *avl_detach(AVLNode *node) {
     return root;
 }
 
-// TODO 
 AVLNode* search_and_delete(AVLNode **root, AVLNode *key, int (*compare)(AVLNode *, AVLNode *)) {
     for (AVLNode *node = *root; node;) {
         int r = compare(node, key);

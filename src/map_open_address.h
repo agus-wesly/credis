@@ -4,7 +4,7 @@
 #ifndef MAP_OPEN_ADDRESS_H
 #define MAP_OPEN_ADDRESS_H
 
-#define CAP_FACTOR 0.75 // TODO : Adjust this
+#define CAP_FACTOR 0.75
 
 
 typedef char *Key;

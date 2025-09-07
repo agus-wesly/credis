@@ -3,7 +3,6 @@
 
 #define container_of(ptr, type, attr) (type *)((char *)(ptr) - offsetof(type, attr));
 
-// TODO : check this
 int compare_tree(AVLNode *left, AVLNode *right) {
     TEntry *entry_left = container_of(left, TEntry, node);
     TEntry *entry_right = container_of(right, TEntry, node);
