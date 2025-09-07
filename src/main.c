@@ -60,10 +60,17 @@ static void out_int(Buffer *buff, int64 val)
     buf_append_64(buff, val);
 }
 
-static void init_array(Buffer *buff, int32 length)
+static int init_array(Buffer *buff)
 {
     buf_append_8(buff, TYPE_ARRAY);
-    buf_append_32(buff, length);
+    buf_append_32(buff, 0);
+    return buff_len(buff) - 4;
+}
+
+static void end_array(size_t ctx, Buffer *buff, int length) {
+    size_t idx = buff->start + ctx;
+    assert(buff->data[idx - 1] == TYPE_ARRAY);
+    memcpy(&buff->data[idx], &length, 4);
 }
 
 static void reply_error(Conn *c, ErrorType err_type, char *msg)
@@ -242,13 +249,12 @@ static void handle_keys(Conn *c, Request *r)
         map_length += map.older.length;
 
     printf("TOTAL LENGTH : %zu\n", map_length);
-    init_array(c->outgoing, map_length);
 
-    // Loop over the map
+    size_t ctx = init_array(c->outgoing);
     ht_each(&map.newer, &cb_keys, c->outgoing);
-
     if (map.older.nodes != NULL)
         ht_each(&map.older, &cb_keys, c->outgoing);
+    end_array(ctx, c->outgoing, map_length);
 
     c->want_read = false;
     c->want_write = true;
@@ -441,7 +447,24 @@ static void handle_z_query(Conn *c, Request *r) {
         out_nil(c->outgoing);
     } else {
         ZSet *set = entry->set;
-        zset_query(set, f_score, key, strlen(key), i_offset, i_limit);
+        {
+            ZNode *curr = zset_find_ge(set, f_score, key, strlen(key));
+            AVLNode *target = avl_offset(&curr->tree_node, i_offset);
+            size_t arr_ctx = init_array(c->outgoing);
+            size_t i = 0;
+            while (i_limit > 0) {
+                if (!target) break;
+                ZNode *node = container_of(target, ZNode, tree_node);
+
+                printf("%s, %f\n", node->key, node->score);
+                out_string(c->outgoing, node->key);
+                out_int(c->outgoing, node->score);
+                i += 2;
+                target = avl_offset(target, +1);
+                --i_limit;
+            }
+            end_array(arr_ctx, c->outgoing, i);
+        }
     }
 
     free(set_key);

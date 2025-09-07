@@ -1,6 +1,5 @@
 #include "sorted_set.h"
 
-
 #define container_of(ptr, type, attr) (type *)((char *)(ptr) - offsetof(type, attr));
 
 int compare_tree(AVLNode *left, AVLNode *right) {
@@ -119,21 +118,14 @@ ZNode *zset_hm_lookup(ZSet *s, char *key, size_t length) {
     return res;
 }
 
-void zset_query(ZSet *s, float score, char *key, size_t length, int offset, int limit) {
+ZNode* zset_find_ge(ZSet *s, float score, char *key, size_t length) {
     ZNode *target = znode_new(score, key, length);
     init_tree_node(&target->tree_node);
     
     AVLNode *curr = avl_find_ge(&s->by_score, &target->tree_node, compare);
-    curr = avl_offset(curr, offset);
-    for (int i = 0; i < limit; ++i) {
-        if (!curr) break;
-        ZNode *node = container_of(curr, ZNode, tree_node);
-        // TODO : add into array here
-        printf("%s, %f\n", node->key, node->score);
-        curr = avl_offset(curr, +1);
-    }
-
     znode_free(target);
+
+    return container_of(curr, ZNode, tree_node);
 }
 
 void zset_update(ZSet *s, ZNode *entry, float new_score) {
