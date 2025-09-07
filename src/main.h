@@ -11,6 +11,7 @@
 
 typedef enum {
     TYPE_INT,
+    TYPE_DOUBLE,
     TYPE_NIL,
     TYPE_BOOL,
     TYPE_STRING,

@@ -60,6 +60,14 @@ static void out_int(Buffer *buff, int64 val)
     buf_append_64(buff, val);
 }
 
+static void out_dbl(Buffer *buff, double val)
+{
+    buf_append_8(buff, TYPE_DOUBLE);
+    int64 raw;
+    memcpy(&raw, &val, sizeof(raw));  // safe copy of 8 bytes
+    buf_append_64(buff, raw);
+}
+
 static int init_array(Buffer *buff)
 {
     buf_append_8(buff, TYPE_ARRAY);
@@ -448,9 +456,8 @@ static void handle_z_query(Conn *c, Request *r) {
             while (i_limit > 0) {
                 if (!target) break;
                 ZNode *node = container_of(target, ZNode, tree_node);
-                // printf("%s, %f\n", node->key, node->score);
                 out_string(c->outgoing, node->key);
-                out_int(c->outgoing, node->score);
+                out_dbl(c->outgoing, (double)node->score);
                 l += 2;
 
                 target = avl_offset(target, +1);
