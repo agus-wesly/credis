@@ -152,7 +152,7 @@ int zset_add(ZSet *s, float score, char *key, size_t length) {
         return 0;
     }
     ZNode *new_entry = znode_new(score, key, length);
-    search_and_insert(&s->by_score, &new_entry->tree_node, compare);
+    search_and_insert(&s->by_score, &new_entry->tree_node, less_than);
     hm_set(&s->by_name, &new_entry->h_node, hn_eq);
     return 1;
 }
