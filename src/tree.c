@@ -42,16 +42,18 @@ static void avl_update(AVLNode *node) {
 }
 
 AVLNode *avl_find_ge(AVLNode **root, AVLNode *target, int (*compare)(AVLNode *, AVLNode *)) {
-    AVLNode **from = root;
-    for (AVLNode *node = *from; node != NULL;) {
-        int r = compare(target, node);
-        if (r == -1) 
-            from = &((*from)->left) ; // target < node
-        else 
-            return node;
-        node = *from;
+    AVLNode *find = NULL;
+    for (AVLNode *node = *root; node != NULL;) {
+        int r = compare(node, target);
+        if (r == -1) {
+            node = node->right ; // node < target
+        }
+        else {
+            find = node;
+            node = node->left;
+        }
     }
-    return NULL;
+    return find;
 }
 
 AVLNode *avl_offset(AVLNode *node, int offset) {

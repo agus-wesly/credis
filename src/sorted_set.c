@@ -111,13 +111,13 @@ TEntry *znode_offset(AVLNode *node, int offset) {
 ZNode *zset_hm_lookup(ZSet *s, char *key, size_t length) {
     if (s->by_name.newer.length == 0) return NULL;
 
-    ZNode entry;
-    entry.h_node.hash = fnv_32a_str(key, length);
-    entry.h_node.next = NULL;
-    
-    HNode *found_ptr = hm_get(&s->by_name, &entry.h_node, hn_eq);
+    ZNode* entry = znode_new(0, key, length);
+
+    HNode *found_ptr = hm_get(&s->by_name, &entry->h_node, hn_eq);
     if (found_ptr == NULL) return NULL;
-    return container_of(found_ptr, ZNode, h_node);
+    ZNode *res = container_of(found_ptr, ZNode, h_node);
+    free(entry);
+    return res;
 }
 
 void zset_query(ZSet *s, float score, char *key, size_t length, int offset, int limit) {
@@ -125,13 +125,11 @@ void zset_query(ZSet *s, float score, char *key, size_t length, int offset, int 
     init_tree_node(&target->tree_node);
     
     AVLNode *curr = avl_find_ge(&s->by_score, &target->tree_node, compare);
-    for (int i = 0; i < offset; ++i) {
-        if (!curr) break;
-        curr = avl_offset(curr, +1);
-    }
+    curr = avl_offset(curr, offset);
     for (int i = 0; i < limit; ++i) {
         if (!curr) break;
         ZNode *node = container_of(curr, ZNode, tree_node);
+        // TODO : add into array here
         printf("%s, %f\n", node->key, node->score);
         curr = avl_offset(curr, +1);
     }
