@@ -26,20 +26,48 @@ AVLNode **find_tree_node(AVLNode **base, AVLNode *node, int (*compare)(AVLNode *
     assert(0 && "Unreachable");
 }
 
-static int avl_height(AVLNode *node){
+static int32 avl_height(AVLNode *node){
     if (node == NULL) return 0;
     return node->height;
+}
+
+static int32 inline avl_cnt(AVLNode *node) {
+    return node ? node->cnt : 0;
 }
 
 static void avl_update(AVLNode *node) {
     if (node == NULL) return;
     node->height = 1 + fmax(avl_height(node->left), avl_height(node->right));
+    node->cnt = 1 + avl_cnt(node->left) + avl_cnt(node->right);
 }
 
 AVLNode *avl_offset(AVLNode *node, int offset) {
+    int pos = 0;
+    while (pos != offset) {
+        if (pos < offset && pos + avl_cnt(node->right) >= offset) {
+            node = node->right;
+            pos += avl_cnt(node->left) + 1;
+        }
+        else if (pos > offset && pos - avl_cnt(node->left) <= offset) {
+            node = node->left;
+            pos -= avl_cnt(node->right) + 1;
+        } else {
+            AVLNode *parent = node->parent;
+            if (!parent) return NULL;
 
+            if (node == parent->left && pos < offset) {
+                pos += avl_cnt(node->right) + 1;
+            } else if (node == parent->right && pos > offset) {
+                pos -= avl_cnt(node->left) + 1;
+            } else {
+                return NULL;
+            }
+
+            node = parent;
+        }
+    }
+    return node;
 }
-
 
 static AVLNode *rot_left(AVLNode *node) {
     AVLNode *parent = node->parent;

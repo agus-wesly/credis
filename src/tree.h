@@ -9,6 +9,7 @@ struct AVLNode {
     AVLNode *right;
     AVLNode *parent;
     int32 height;
+    int32 cnt;
 };
 
 #define with_offset_and_limit(node, display, p, offset, limit) \
