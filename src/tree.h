@@ -38,5 +38,5 @@ void dfs_tree(AVLNode *node, void (cb) (AVLNode *, void *userdata), void *userda
 void dfs_tree_with_boundary(AVLNode *node, AVLNode *lower, void (display)(AVLNode *node, void *userdata), void *p, int *offset, int *limit);
 AVLNode *avl_detach(AVLNode *node);
 AVLNode *avl_offset(AVLNode *node, int offset);
-
+AVLNode *avl_find_ge(AVLNode **root, AVLNode *target, int (*compare)(AVLNode *, AVLNode *));
 #endif // TREE_H

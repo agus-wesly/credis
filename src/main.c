@@ -402,45 +402,6 @@ bool s_entry_greater_equal_than(ZNode *s_entry, float score, char *key) {
     return res > 0;
 }
 
-// find >=
-static AVLNode *find_upper_boundary(AVLNode *root, float score, char *key) {
-    AVLNode *find = root;
-    while (find != NULL) {
-        ZNode *s_entry = container_of(find, ZNode, tree_node);
-        // if (s_entry_less_than(s_entry, score, key)) {
-        if (set_less_than(s_entry->score, s_entry->key, score, key)) {
-            find = find->right;
-            // TODO : we messed up something in the add
-            // So that we got the aa is overriding the a
-            printf("Go next\n");
-        } else {
-            printf("Upper boundary : %f %s\n", s_entry->score, s_entry->key);
-            break;
-        }
-    }
-    return find;
-}
-
-static AVLNode *find_lower_boundary(AVLNode *root, float score, char *key) {
-    AVLNode *find = root;
-    while (find != NULL) {
-        ZNode *s_entry = container_of(find, ZNode, tree_node);
-        // if (set_equal_than(score, key, s_entry->score, s_entry->key)) {
-        //     printf("Is equal %f %f\n", score, s_entry->score);
-        //     find = find->right;
-        // }
-        if (set_equal_than(score, key, s_entry->score, s_entry->key) || set_less_than(score, key, s_entry->score, s_entry->key)) {
-            printf("Is less than %f %f\n", score, s_entry->score);
-            find = find->left;
-        } else {
-            printf("Lower boundary : %f %s %f\n", s_entry->score, s_entry->key, score);
-            break;
-        }
-    }
-    return find;
-}
-
-
 static void handle_z_query(Conn *c, Request *r) {
     // ZQUERY <set_name> <score> <key> <offset> <limit>
 
@@ -480,22 +441,7 @@ static void handle_z_query(Conn *c, Request *r) {
         out_nil(c->outgoing);
     } else {
         ZSet *set = entry->set;
-
-        char msg[512];
-        memset(msg, '\0', 512);
-        Param p = {c, msg};
-        AVLNode *upper = find_upper_boundary(set->by_score, f_score, key);
-        if (upper == NULL) {
-            out_nil(c->outgoing);
-        } else {
-            AVLNode *lower = find_lower_boundary(upper, f_score, key);
-            if (lower == NULL) {
-                dfs_tree(upper, snode_send_display, &p, &i_offset, &i_limit);
-            } else {
-                dfs_tree_with_boundary(upper, lower, snode_send_display, &p, &i_offset, &i_limit);
-            }
-            out_string(c->outgoing, msg);
-        }
+        zset_query(set, f_score, key, strlen(key), i_offset, i_limit);
     }
 
     free(set_key);
@@ -855,7 +801,7 @@ int main()
 }
 
 // void run_test();
-
+// 
 // int main() {
 //     run_test();
 //     return EXIT_SUCCESS;

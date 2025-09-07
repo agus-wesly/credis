@@ -98,7 +98,7 @@ ZNode* znode_new(float score, char *key, size_t length) {
     return node;
 }
 
-void znode_del(ZNode *node) {
+void znode_free(ZNode *node) {
     free(node);
 }
 
@@ -118,6 +118,25 @@ ZNode *zset_hm_lookup(ZSet *s, char *key, size_t length) {
     HNode *found_ptr = hm_get(&s->by_name, &entry.h_node, hn_eq);
     if (found_ptr == NULL) return NULL;
     return container_of(found_ptr, ZNode, h_node);
+}
+
+void zset_query(ZSet *s, float score, char *key, size_t length, int offset, int limit) {
+    ZNode *target = znode_new(score, key, length);
+    init_tree_node(&target->tree_node);
+    
+    AVLNode *curr = avl_find_ge(&s->by_score, &target->tree_node, compare);
+    for (int i = 0; i < offset; ++i) {
+        if (!curr) break;
+        curr = avl_offset(curr, +1);
+    }
+    for (int i = 0; i < limit; ++i) {
+        if (!curr) break;
+        ZNode *node = container_of(curr, ZNode, tree_node);
+        printf("%s, %f\n", node->key, node->score);
+        curr = avl_offset(curr, +1);
+    }
+
+    znode_free(target);
 }
 
 void zset_update(ZSet *s, ZNode *entry, float new_score) {
@@ -149,7 +168,7 @@ bool zset_rem(ZSet *s, char *key, size_t length) {
     AVLNode *avl_deleted = search_and_delete(&s->by_score, &entry->tree_node, less_than);
     if (avl_deleted) {
         ZNode *del = container_of(avl_deleted, ZNode, tree_node);
-        znode_del(del);
+        znode_free(del);
     }
     return true;
 }

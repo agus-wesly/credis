@@ -23,8 +23,34 @@ void test_all(AVLNode **root) {
     printf("Tree after insertion:\n");
     display_tree(*root, cb);
 
-    TEntry *offseted = znode_offset(*root, 2);
-    printf("Offseted is : %d\n", offseted->value);
+    TEntry *offseted = {0};
+
+    // \nAdding elements: 20, 30, 40, 50, 60, 70, 80\n;
+    
+    AVLNode *root_next = (*root);
+    offseted = znode_offset(root_next, 1); // 80
+    if (offseted)
+        printf("Offseted is : %d\n", offseted->value); 
+
+    offseted = znode_offset(root_next, 2); // 70
+    if (offseted)
+        printf("Offseted is : %d\n", offseted->value);
+
+    offseted = znode_offset(root_next, -1); // 40
+    if (offseted)
+        printf("Offseted is : %d\n", offseted->value);
+
+    offseted = znode_offset(root_next, -2); // 30
+    if (offseted)
+        printf("Offseted is : %d\n", offseted->value);
+
+    offseted = znode_offset(root_next, 0); // 50
+    if (offseted)
+        printf("Offseted is : %d\n", offseted->value);
+
+    offseted = znode_offset(root_next, -3); // 50
+    if (offseted) 
+        printf("Offseted is : %d\n", offseted->value);
 
     return;
 
@@ -131,6 +157,7 @@ void run_test() {
     ZSet *s = new_sorted_set();
     test_all(&s->by_score);
     return;
+
     test_insert_patterns(&s->by_score);
     test_removal_patterns(&s->by_score);
     stress_random_ops(&s->by_score, 6969);
