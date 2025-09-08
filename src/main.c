@@ -83,7 +83,6 @@ static void end_array(size_t ctx, Buffer *buff, int length) {
 
 static void reply_error(Conn *c, ErrorType err_type, char *msg)
 {
-    // [type, err_code, strlen, str]
     buf_append_8(c->outgoing, TYPE_ERROR);
     buf_append_32(c->outgoing, err_type);
 
@@ -365,53 +364,6 @@ static void handle_z_rem(Conn *c, Request *r) {
 
     free(set_key);
     free(key);
-}
-
-typedef struct {Conn *c; char *msg;} Param;
-void snode_send_display(AVLNode *node, void *userdata) {
-    Param *p = (Param *)userdata;
-
-    ZNode *t = container_of(node, ZNode, tree_node);
-
-    char msg[512];
-    memset(msg, '\0', 512);
-    sprintf(msg, "%s\n%f\n=======\n", t->key, t->score);
-    strncat(p->msg, msg, strlen(msg));
-
-}
-
-bool set_less_than(float score_left, char *key_left, float score_right, char *key_right) {
-    if (score_left != score_right) {
-        return score_left < score_right;
-    }
-    int res = memcmp(key_left, key_right, fmax(strlen(key_right), strlen(key_left)));
-    return res < 0;
-}
-
-bool set_equal_than(float score_left, char *key_left, float score_right, char *key_right) {
-    return score_left == score_right  
-        && strlen(key_right) == strlen(key_left)
-        && (memcmp(key_left, key_right, fmin(strlen(key_right), strlen(key_left))) == 0);
-}
-
-bool s_entry_less_than(ZNode *s_entry, float score, char *key) {
-    if (s_entry->score != score) {
-        return s_entry->score < score;
-    }
-    int res = memcmp(s_entry->key, key, fmin(strlen(key), strlen(s_entry->key)));
-    return res < 0;
-}
-
-bool s_entry_greater_equal_than(ZNode *s_entry, float score, char *key) {
-    // Check if it is same first using the set comparison
-    int res = memcmp(s_entry->key, key, fmin(strlen(key), strlen(s_entry->key)));
-    if (s_entry->score == score && res == 0) {
-        return true;
-    }
-    if (s_entry->score != score) {
-        return s_entry->score > score;
-    }
-    return res > 0;
 }
 
 static void handle_z_query(Conn *c, Request *r) {
@@ -851,10 +803,3 @@ int main()
     }
     return EXIT_SUCCESS;
 }
-
-// void run_test();
-// 
-// int main() {
-//     run_test();
-//     return EXIT_SUCCESS;
-// }
