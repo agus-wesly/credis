@@ -471,6 +471,35 @@ static void handle_z_query(Conn *c, Request *r) {
     free(limit);
 }
 
+
+static void handle_z_rank(Conn *c, Request *r) {
+    if (r->nstrings != 3) {
+        reply_error(c, ERR_UNKNOWN, "ERR wrong number of arguments for 'zrank' command");
+        return;
+    }
+
+    char *set_key = read_next(r);
+    char *key = read_next(r);
+
+    Entry *entry = entry_get_from_map(set_key);
+    if (!entry) {
+        out_nil(c->outgoing);
+        goto end;
+    }
+    ZSet *set = entry->set;
+    ZNode *node = zset_hm_lookup(set, key, strlen(key));
+    if (!node) {
+        out_nil(c->outgoing);
+        goto end;
+    }
+    size_t rank = zset_rank(set, node);
+    out_int(c->outgoing, rank);
+
+end:
+    free(set_key);
+    free(key);
+}
+
 static void handle_z_score(Conn *c, Request *r) {
     // ZSCORE <set_name> <key> -> score
     if (r->nstrings != 3) {
@@ -529,6 +558,9 @@ bool process_one_request(Conn *conn, int8 *request, int len)
 
     else if(strcmp(data, "ZQUERY") == 0) 
         handle_z_query(conn, req);
+
+    else if(strcmp(data, "ZRANK") == 0) 
+        handle_z_rank(conn, req);
 
     else if(strcmp(data, "ZREM") == 0) 
         handle_z_rem(conn, req);

@@ -34,4 +34,5 @@ ZNode* zset_find_ge(ZSet *s, float score, char *key, size_t length);
 void zset_query(ZSet *s, float score, char *key, size_t length, int offset, int limit);
 TEntry *znode_offset(AVLNode *node, int offset);
 ZNode *zset_offset(ZNode *node, int offset);
+size_t zset_rank(ZSet *s, ZNode *node);
 #endif

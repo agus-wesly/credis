@@ -39,4 +39,6 @@ void dfs_tree_with_boundary(AVLNode *node, AVLNode *lower, void (display)(AVLNod
 AVLNode *avl_detach(AVLNode *node);
 AVLNode *avl_offset(AVLNode *node, int offset);
 AVLNode *avl_find_ge(AVLNode **root, AVLNode *target, int (*compare)(AVLNode *, AVLNode *));
+size_t avl_rank(AVLNode *root, AVLNode *target, int (*compare)(AVLNode *, AVLNode *));
+int avl_cnt(AVLNode *node);
 #endif // TREE_H

@@ -31,7 +31,7 @@ static int avl_height(AVLNode *node){
     return node->height;
 }
 
-static int avl_cnt(AVLNode *node) {
+int avl_cnt(AVLNode *node) {
     return node ? node->cnt : 0;
 }
 
@@ -40,6 +40,7 @@ static void avl_update(AVLNode *node) {
     node->height = 1 + fmax(avl_height(node->left), avl_height(node->right));
     node->cnt = 1 + avl_cnt(node->left) + avl_cnt(node->right);
 }
+
 
 AVLNode *avl_find_ge(AVLNode **root, AVLNode *target, int (*compare)(AVLNode *, AVLNode *)) {
     AVLNode *find = NULL;
@@ -54,6 +55,26 @@ AVLNode *avl_find_ge(AVLNode **root, AVLNode *target, int (*compare)(AVLNode *, 
         }
     }
     return find;
+}
+
+size_t avl_rank(AVLNode *root, AVLNode *target, int (*compare)(AVLNode *, AVLNode *)) {
+    size_t rank = avl_cnt(root->left) + 1; 
+
+    for (AVLNode *node = root; node != NULL;) {
+        int r = compare(node, target);
+        if (r == -1) {
+            node = node->right ; // node < target
+            rank += avl_cnt(node->left) + 1;
+        }
+        else if (r == 1) {
+            node = node->left ; // node > target
+            rank -= avl_cnt(node->right) + 1;
+        }
+        else {
+            return rank;
+        }
+    }
+    assert(0 && "Unexpected not found in avl_rank");
 }
 
 AVLNode *avl_offset(AVLNode *node, int offset) {
@@ -72,9 +93,9 @@ AVLNode *avl_offset(AVLNode *node, int offset) {
             AVLNode *parent = node->parent;
             if (!parent) return NULL;
 
-            if (node == parent->left && pos < offset) {
+            if (node == parent->left) {
                 pos += avl_cnt(node->right) + 1;
-            } else if (node == parent->right && pos > offset) {
+            } else if (node == parent->right) {
                 pos -= avl_cnt(node->left) + 1;
             } else {
                 return NULL;

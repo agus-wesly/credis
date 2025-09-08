@@ -118,6 +118,10 @@ ZNode *zset_hm_lookup(ZSet *s, char *key, size_t length) {
     return res;
 }
 
+size_t zset_rank(ZSet *s, ZNode *node) {
+    return avl_rank(s->by_score, &node->tree_node, compare);
+}
+
 ZNode* zset_find_ge(ZSet *s, float score, char *key, size_t length) {
     ZNode *target = znode_new(score, key, length);
     init_tree_node(&target->tree_node);
@@ -140,7 +144,7 @@ void zset_update(ZSet *s, ZNode *entry, float new_score) {
     s->by_score = avl_detach(&entry->tree_node);
     init_tree_node(&entry->tree_node);
     entry->score = new_score;
-    search_and_insert(&s->by_score, &entry->tree_node, compare);
+    search_and_insert(&s->by_score, &entry->tree_node, less_than);
 }
 
 int zset_add(ZSet *s, float score, char *key, size_t length) {
@@ -161,7 +165,7 @@ bool zset_rem(ZSet *s, char *key, size_t length) {
         return false;
     }
     hm_delete(&s->by_name, &entry->h_node, hn_eq);
-    AVLNode *avl_deleted = search_and_delete(&s->by_score, &entry->tree_node, less_than);
+    AVLNode *avl_deleted = search_and_delete(&s->by_score, &entry->tree_node, compare);
     if (avl_deleted) {
         ZNode *del = container_of(avl_deleted, ZNode, tree_node);
         znode_free(del);
