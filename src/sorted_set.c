@@ -128,6 +128,13 @@ ZNode* zset_find_ge(ZSet *s, float score, char *key, size_t length) {
     return container_of(curr, ZNode, tree_node);
 }
 
+ZNode *zset_offset(ZNode *node, int offset) {
+    AVLNode *target = avl_offset(&node->tree_node, offset);
+    if (target)
+        return container_of(target, ZNode, tree_node);
+    return NULL;
+}
+
 void zset_update(ZSet *s, ZNode *entry, float new_score) {
     if (entry->score == new_score) return;
     s->by_score = avl_detach(&entry->tree_node);

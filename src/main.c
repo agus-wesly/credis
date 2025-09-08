@@ -447,24 +447,21 @@ static void handle_z_query(Conn *c, Request *r) {
     if (entry == NULL) {
         out_nil(c->outgoing);
     } else {
+        size_t arr_ctx = init_array(c->outgoing);
+        size_t l = 0;
         ZSet *set = entry->set;
-        {
-            ZNode *curr = zset_find_ge(set, f_score, key, strlen(key));
-            AVLNode *target = avl_offset(&curr->tree_node, i_offset);
-            size_t arr_ctx = init_array(c->outgoing);
-            size_t l = 0;
-            while (i_limit > 0) {
-                if (!target) break;
-                ZNode *node = container_of(target, ZNode, tree_node);
-                out_string(c->outgoing, node->key);
-                out_dbl(c->outgoing, (double)node->score);
-                l += 2;
+        ZNode *curr = zset_find_ge(set, f_score, key, strlen(key));
+        curr = zset_offset(curr, i_offset);
+        while (i_limit > 0) {
+            if (!curr) break;
+            out_string(c->outgoing, curr->key);
+            out_dbl(c->outgoing, (double)curr->score);
+            l += 2;
 
-                target = avl_offset(target, +1);
-                --i_limit;
-            }
-            end_array(arr_ctx, c->outgoing, l);
+            curr = zset_offset(curr, +1);
+            --i_limit;
         }
+        end_array(arr_ctx, c->outgoing, l);
     }
 
     free(set_key);
