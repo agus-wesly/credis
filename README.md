@@ -1,15 +1,19 @@
 ## CREDIS
 CRedis is my own implementation of Redis server using C Programming Language.
 This implementation is based on [this tutorial](https://build-your-own.org/redis/).
+You can use the client here : [client](https://github.com/agus-wesly/credis-client)
 
----
+### Building and Running
+```bash
+make -B
+
+./credis
+```
 
 ## Table of Contents
 
 1. [Primitive Commands](#primitive-commands)
 2. [Sorted Set Commands](#sorted-set-commands)
-
----
 
 ## Primitive Commands
 
